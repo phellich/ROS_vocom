@@ -31,6 +31,8 @@ current_dir=$(pwd)
 # Use dirname to get the parent directory
 parent_dir=$(dirname "$current_dir")
 
+# Add this line if you want to use sound: --device /dev/snd your_image_name \ 
+
 docker run -it \
     --name base_humble_desktop \
     --rm \
@@ -45,4 +47,8 @@ docker run -it \
     -v /dev:/dev \
     -v $parent_dir:/home/xplore/dev_ws/src \
     -v base_humble_desktop_home_volume:/home/xplore \
+    --device /dev/snd \
     ghcr.io/epflxplore/base:humble-desktop
+
+# pour run docker compose:
+# docker-compose up
