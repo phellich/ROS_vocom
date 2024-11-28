@@ -33,6 +33,10 @@ parent_dir=$(dirname "$current_dir")
 
 # Add this line if you want to use sound: --device /dev/snd your_image_name \ 
 
+# docker build  -f Dockerfile  . -t
+docker build -f Dockerfile . -t epflxplore/vocal_command:latest
+
+
 docker run -it \
     --name base_humble_desktop \
     --rm \

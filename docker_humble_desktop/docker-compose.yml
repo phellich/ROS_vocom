@@ -1,0 +1,7 @@
+# version: '3'
+# services:
+#   human_rover:
+#     image: xplore_human_rover:1.0
+#     build:
+#       context: .
+#     ...
