@@ -1,6 +1,7 @@
-###########################################
-# Xplore Recruitment image Build Docker
-###########################################
+#######################################################
+# DEPRECATED ## Xplore Recruitment image Build Docker #
+#######################################################
+
 FROM ghcr.io/epflxplore/docker_commons:humble-desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
