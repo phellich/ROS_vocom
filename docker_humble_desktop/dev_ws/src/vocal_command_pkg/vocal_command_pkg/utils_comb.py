@@ -14,16 +14,8 @@ import re
 import torch
 import ollama
 
-
-def print2(text, print_mode="terminal", ROSnode=None): #rover
-    if print_mode=="terminal":
-        print(text)
-    elif print_mode=="rover":
-        if ROSnode is None: 
-            raise ValueError("ROSnode must be provided for mode='rover'.")
-        ROSnode.get_logger().info(text)
-    else:
-        raise ValueError("Invalid mode. Choose 'terminal' or 'rover'.")
+import websocket
+import json
 
 ## SPEECH 2 TEXT ##################################################
 
@@ -73,16 +65,7 @@ def vosk_config(model_path):
     vosk_model = vosk.Model(model_path)
     return vosk_model
 
-def recognize_speech_VOSK(recognizer, audio, word_2_rec):
-    """Processes audio data and checks for the wake word."""
-    recognizer.AcceptWaveform(audio)
-    result = json.loads(recognizer.Result())
-    text = result['text']
-    word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
-    if text:
-        print2(f"Vosk: {text}")
-    return text, word_2_rec_bool
-
+# Fonctions Speech recognition
 def recognize_speech_WHISPER(model, audio, word_2_rec=None, audio_path=None): # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text 
     """Processes audio data and checks for the wake word."""
     if audio_path:
@@ -98,36 +81,58 @@ def recognize_speech_WHISPER(model, audio, word_2_rec=None, audio_path=None): # 
         print(f"Whisper: {text}")
     return text, word_2_rec_bool
 
-# Fonctions Speech recognition
-def listen_wake_word(stream, word_2_rec, metadata, model, model_used, ):
-    """Lit l'audio du flux et applique une fonction de reconnaissance."""
-    while True:
-        # durée d'un chunk = (chunk_size/framerate) = 16384/16000 = 1.024s
-        audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True) 
+def listen_wake_word_ws(stream, word_2_rec, metadata, ws_url):
+    """Listens for the wake word via Vosk WebSocket."""
+    ws = websocket.create_connection(ws_url)
+    try:
+        while True:
+            # Read audio chunk
+            audio = stream.read(metadata["chunk"] * 4, exception_on_overflow=True)
 
-        if model_used=="vosk":
-            _, wake_word_detected = recognize_speech_VOSK(model, audio, word_2_rec)
-        # if model_used=="whisper":
-        #     _, wake_word_detected = recognize_speech_WHISPER(model, audio, word_2_rec)
+            # Send audio to Vosk WebSocket server
+            ws.send_binary(audio)
+            result = ws.recv()
+            result = json.loads(result)
 
-        if wake_word_detected:
-            return True
+            # Check if the wake word is detected
+            if "text" in result:
+                text = result["text"]
+                print(f"Vosk: {text}")
+                if any(w in text.lower() for w in word_2_rec):
+                    return True
+    finally:
+        ws.close()
 
-def process_audio_stream(stream, word_2_rec, metadata, model, model_used, return_text_and_audio=False, timeout=30):
+def recognize_speech_VOSK_ws(ws_url, audio, word_2_rec):
+    """Processes audio data via Vosk WebSocket and checks for the specified word."""
+    ws = websocket.create_connection(ws_url)
+    try:
+        # Send audio to Vosk WebSocket server
+        ws.send_binary(audio)
+        result = ws.recv()
+        result = json.loads(result)
+
+        text = result.get("text", "")
+        word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
+
+        if text:
+            print(f"Vosk: {text}")
+
+        return text, word_2_rec_bool
+    finally:
+        ws.close()
+        
+def process_audio_stream_ws(stream, word_2_rec, metadata, ws_url, timeout=30):
     """Processes the audio stream and applies speech recognition."""
 
     audio_chunks, text_chunks = [], []
     while True:
         audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True) 
 
-        if model_used == "vosk":
-            text, wake_word_detected = recognize_speech_VOSK(model, audio, word_2_rec)
-        # if model_used == "whisper":
-        #     text, wake_word_detected = recognize_speech_WHISPER(model, audio, word_2_rec)
+        text, wake_word_detected = recognize_speech_VOSK_ws(ws_url, audio, word_2_rec)
 
-        if return_text_and_audio:
-            audio_chunks.append(audio)
-            text_chunks.append(text)
+        audio_chunks.append(audio)
+        text_chunks.append(text)
 
         # If audio chunks accumulated are more than timeout seconds, return the results
         if len(b''.join(audio_chunks)) / metadata["framerate"] > timeout*2:

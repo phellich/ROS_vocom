@@ -11,6 +11,7 @@ services: # different containers
       - DISPLAY=$DISPLAY # give display server info from host to container (GUI application=graphical user interface)
       - QT_X11_NO_MITSHM=1 # disable MIT-SHM extension ? (not good inside docker)
       - XAUTHORITY=/tmp/.docker.xauth # path to xauth file
+      - PULSE_SERVER=unix:/mnt/wslg/PulseServer # Ajout de la variable d'environnement pour PulseAudio
     volumes: # partage et persiste des données entre host et container
       # - /tmp/.X11-unix:/tmp/.X11-unix:rw # pour des GUI
       # - /run/user/1000/at-spi:/run/user/1000/at-spi # host at-spi to container
@@ -29,9 +30,23 @@ services: # different containers
     tty: true # Allocates a terminal (pseudo-TTY)  to the container for interactive commands. (TTY = Teletype, refer to the text input/output env of a computer) 
     stdin_open: true # allows to interact with terminal opened 
     # same as -t or -i for docker run, or -it to combine them 
-    
+  
+  # Si vocal_command capture l’audio via /dev/snd et le transmet à vosk_server via WebSocket, vosk_server n’a pas besoin d’accès direct au microphone.
+  vosk_server:
+    image: alphacep/kaldi-en:latest  # Use Vosk English model (Kaldi server)
+    container_name: vosk_server
+    ports:
+      - "2700:2700"  # Expose WebSocket port
+    restart: unless-stopped
+    environment:
+      - LANG=C.UTF-8
+
+# device manager of windows
+# https://x410.dev/cookbook/wsl/enabling-sound-in-wsl-ubuntu-let-it-sing/ 
+# https://stackoverflow.com/questions/68310978/playing-sound-in-docker-container-on-wsl-in-windows-11 
+
 # add service of Ollama
 # https://stackoverflow.com/questions/78438394/how-to-create-an-ollama-model-using-docker-compose
-# add service of microphone ??
+
 volumes: 
   base_humble_desktop_home_volume:

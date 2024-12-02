@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+from glob import glob
+import os
 
 package_name = 'vocal_command_pkg'
 
@@ -10,7 +12,18 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # (os.path.join('share', package_name, 'models/Vosk_Small'), glob('models/Vosk_Small/**/*', recursive=True)),
+        # (
+        #     os.path.join('share', package_name, 'Vosk_Small/am'),
+        #     ['Vosk_Small/am/final.mdl']
+        # ),
+        # (
+        #     os.path.join('share', package_name, 'Vosk_Small/conf'),
+        #     ['Vosk_Small/conf/mfcc.conf']
+        # ),
+        # (
+        #     os.path.join('share', package_name, 'Vosk_Small'),
+        #     glob('Vosk_Small/**/*', recursive=True)
+        # ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

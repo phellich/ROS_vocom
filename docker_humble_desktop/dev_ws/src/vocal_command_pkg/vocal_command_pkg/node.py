@@ -10,9 +10,8 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 import time
 # from llama_cpp import Llama
 import torch
-# from ament_index_python.packages import get_package_share_directory
 
-from vocal_command_pkg.utils_comb import vosk_config, whisper_config, open_microphone_stream, listen_wake_word, process_audio_stream, save_audio, recognize_speech_WHISPER, close_microphone_stream, get_prompt, call_llama, prepare_llama_cpp_generation, llama_cpp_generation, save_json, validate_json_struct, load_tokenizer_model, generate_text, extract_first_json
+from vocal_command_pkg.utils_comb import * 
 
 class VoCom_PubSub(Node):
 
@@ -29,9 +28,10 @@ class VoCom_PubSub(Node):
         self.p = None
         self.get_logger().info('Node has been started. Vocom_model_state is False')
 
-        # PUBLISHER $
-        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, depth=10)
+        # PUBLISHER
+        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=10)
         self.publisher_ = self.create_publisher(Joy, "fake_cs_response", qos_profile) # /CS/NAV_gamepad
+        self.publisher_.publish(Joy()) # Initialize the publisher with an empty message	
 
         # SUBSCRIBER 
         self.subscription_ = self.create_subscription(Bool, 'fake_cs_cmd', self.listener_callback_CS, 10) # /CS/vocom_state
@@ -41,31 +41,12 @@ class VoCom_PubSub(Node):
         # Initialisation du modèle 
 
         # 1. Vosk
-        # model_path_vosk = "com_exec/models/Vosk_Small" # "vosk-model-en-us-0.22" (40M/1.8G) (https://alphacephei.com/vosk/models)
-        # self.model_vosk = vosk_config(model_path_vosk)
-
-        # Dynamically locate the Vosk model path
-        # package_name = 'com_exec'
-        # model_path_vosk = os.path.join(
-        #     get_package_share_directory(package_name),
-        #     'models',
-        #     'Vosk_Small'
-        # )
-
-        # # Check if the path exists
-        # if not os.path.exists(model_path_vosk):
-        #     self.get_logger().error(f"Vosk model path does not exist: {model_path_vosk}")
-        #     raise FileNotFoundError(f"Model path not found: {model_path_vosk}")
-
-        # # Initialize the Vosk model
-        # self.get_logger().info(f"Loading Vosk model from: {model_path_vosk}")
-
-        # self.model_vosk = vosk.Model(model_path_vosk)
+        # via vosk server websocket
 
         # 2. Whisper
-        self.get_logger().info("Downloading Whisper (ignore warnings)")
         model_name_whisper = "base.en" 
         self.model_whisper = whisper_config(model_name_whisper)
+        self.get_logger().info("Whisper Base.en model ready (ignore warnings)")
 
 
     # SUBSCRIBER CALLBACK OF CS
@@ -97,50 +78,35 @@ class VoCom_PubSub(Node):
         Input: None
         Output: text (str) - The recognized text from the Speech to Text system.
         '''
-        self.get_logger().info("1")
 
         wake_word = ["hello", "halo", "hullo", "allo", "jello", "fellow", "yellow", "he low", "hell oh"]
         sleep_word = ["goodbye", "dubai", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by"]
         delay_for_commands = 30
 
-        self.get_logger().info("2")
+        self.get_logger().info("1")
 
         self.p, self.stream, metadata = open_microphone_stream()
         self.get_logger().info(f"Opened microphone stream")
-
-        # try: 
-        #     self.p, self.stream, metadata = open_microphone_stream()
-        #     self.get_logger().info(f"Opened microphone stream")
-        # except Exception as e:
-        #     self.get_logger().error(f"Error opening microphone stream: {e}")
-        #     return
         
-        self.get_logger().info("3")
-        
-        rate = metadata["framerate"]
-        recognizer = vosk.KaldiRecognizer(self.model_vosk, rate) # metadata.fs
+        ws_url = "ws://localhost:2700"  # Vosk server WebSocket URL
 
         self.get_logger().info(f"Speech 2 Text runnning. Waiting for wake word {wake_word[0]}")
 
-        if listen_wake_word(self.stream, 
-                                wake_word,
-                                metadata, 
-                                recognizer, 
-                                "vosk"):
-            
+        if listen_wake_word_ws(self.stream, wake_word, metadata, ws_url):
             self.get_logger().info(f"Start listening for commands for {delay_for_commands}s max. Terminate with: {sleep_word}")
-            audio, text = process_audio_stream(self.stream, 
-                                            sleep_word,
-                                            metadata, 
-                                            recognizer, 
-                                            "vosk",
-                                            return_text_and_audio=True, 
-                                            timeout=delay_for_commands)
-            self.get_logger().info(f"Succesfully recorded command.") # why does it print max audio duration reached???
+        
+            audio, text = process_audio_stream_ws(self.stream, 
+                                                    sleep_word,
+                                                    metadata, 
+                                                    ws_url,
+                                                    timeout=delay_for_commands)
+            
+            self.get_logger().info(f"Succesfully recorded command.") 
 
-            save_audio(audio, self.output_folder+"audio.wav", p, metadata)
+            save_audio(audio, self.output_folder+"audio.wav", self.p, metadata)
             with open(self.output_folder+"text_vosk.txt", "w") as output_file:
                 output_file.write(text)
+
             text, _ = recognize_speech_WHISPER(self.model_whisper, audio)
             with open(self.output_folder+"text_whisper.txt", "w") as output_file:
                 output_file.write(text)
@@ -148,7 +114,6 @@ class VoCom_PubSub(Node):
             close_microphone_stream(self.p, self.stream) 
 
             self.get_logger().info(f"Returning text: {text}")
-
             return text
 
     def run_T2C(self, S2T_output, interfere_with_model_with="ollama"): 

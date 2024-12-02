@@ -8,9 +8,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Switch to root user to have sufficient privileges for apt-get
 USER root
+
 # sudo apt-get install -y alsa-base alsa-utils 
 RUN apt-get update && apt-get install -y portaudio19-dev 
+
 # RUN apt-get update && apt-get install -y docker-compose
+
+# Installer PulseAudio et paplay (lecteur audio)
+RUN apt-get update && \
+    apt-get install -y pulseaudio pulseaudio-utils && \
+    rm -rf /var/lib/apt/lists/*
 
 #utile pour avoir les requirements.txt car supp a la fin de l'autre dockerfile
 USER $USERNAME

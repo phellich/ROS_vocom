@@ -116,9 +116,10 @@ cd vocal_command_pkg
 ```
 
 ### Build and Run the Package
-1. Navigate to the folder `docker_humble_desktop`. If the Docker container is not already running, start it using the run.sh script for Linux
+1. Navigate to the folder `docker_humble_desktop`. If the Docker container is not already running, start it using the run.sh script for Linux. Then access the docker container terminal.
 ```sh
 ./run.sh
+docker exec -it epflxplore_vocal_command bash
 ```
 If an error occurs showing the missing command `docker-compose`, install it using `sudo apt-get update && sudo apt-get install -y docker-compose`
 
@@ -142,7 +143,7 @@ ros2 run vocal_command_pkg vocom_node
 
 4. Open a new terminal, go inside the Docker container and run the second node:
 ```sh
-docker exec -it base_humble_desktop bash
+docker exec -it epflxplore_vocal_command bash
 . install/setup.bash
 ros2 run vocal_command_pkg fake_cs_node
 ```

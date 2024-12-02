@@ -37,8 +37,10 @@ docker-compose build
 
 # Run the container
 echo "Running the container with Docker Compose..."
-docker-compose run --service-ports vocal_command /bin/bash
+docker-compose up -d 
+# docker-compose run --service-ports vocal_command /bin/bash -d
 # démarre container pour service vocal_command + ouvre un terminal interactif avec /bin/bash
+# RUN overrides docker compose so use up instead 
 
 # sudo apt-get install -y docker-compose
 
