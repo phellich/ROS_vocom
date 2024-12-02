@@ -19,6 +19,7 @@ services: # different containers
       - base_humble_desktop_home_volume:/home/xplore
       # tout fichier ou répertoire stocké dans le volume base_humble_desktop_home_volume sera accessible à l'intérieur du conteneur à l'emplacement /home/xplore.
       # Contrairement aux fichiers créés directement dans le conteneur, les données dans ce volume persisteront même si le conteneur est arrêté ou supprimé
+      - ./dev_ws/src:/home/xplore/dev_ws/src  # Synchronisation de src entre hôte et container
     devices: # host sound device to container
     # https://forums.docker.com/t/devices-and-volumes-in-docker-compose/135966
     # https://discourse.mopidy.com/t/audio-device-in-docker/4587 
@@ -29,7 +30,7 @@ services: # different containers
     stdin_open: true # allows to interact with terminal opened 
     # same as -t or -i for docker run, or -it to combine them 
     
-# add serice of Ollama
+# add service of Ollama
 # https://stackoverflow.com/questions/78438394/how-to-create-an-ollama-model-using-docker-compose
 # add service of microphone ??
 volumes: 

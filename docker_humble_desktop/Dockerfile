@@ -10,6 +10,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 # sudo apt-get install -y alsa-base alsa-utils 
 RUN apt-get update && apt-get install -y portaudio19-dev 
+# RUN apt-get update && apt-get install -y docker-compose
 
 #utile pour avoir les requirements.txt car supp a la fin de l'autre dockerfile
 USER $USERNAME

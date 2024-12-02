@@ -120,6 +120,7 @@ cd vocal_command_pkg
 ```sh
 ./run.sh
 ```
+If an error occurs showing the missing command `docker-compose`, install it using `sudo apt-get update && sudo apt-get install -y docker-compose`
 
 2. In the dev_ws directory, build the package:
 ```sh
@@ -134,12 +135,12 @@ This command compiles the package and sets up the necessary environment.
 ```
 This command sets up the environment variables needed to run the nodes. Now, your terminal is aware of the existing nodes. You will have to execute this command on every terminal you open to help it find your nodes.
 
-4. Open a new terminal inside the Docker container and run the first node:
+4. Run the first node:
 ```sh
 ros2 run vocal_command_pkg vocom_node
 ```
 
-4. Open a new terminal inside the Docker container and run the second node:
+4. Open a new terminal, go inside the Docker container and run the second node:
 ```sh
 docker exec -it base_humble_desktop bash
 . install/setup.bash

@@ -25,6 +25,12 @@ echo "Done."
 # echo ""
 echo "Running docker..."
 
+# # Check if docker-compose is installed
+# if ! command -v docker-compose &> /dev/null; then
+#   echo "docker-compose not found, installing..."
+#   sudo apt-get update && sudo apt-get install -y docker-compose
+# fi
+
 # Build the container only if the image needs to be built
 echo "Building the container with Docker Compose..."
 docker-compose build
