@@ -41,13 +41,17 @@ class VoCom_PubSub(Node):
         # Initialisation du modèle 
 
         # 1. Vosk
+        # local 
+        model_path_vosk = "/home/xplore/dev_ws/src/vocal_command_pkg/vocal_command_pkg/Vosk_Small/" # "vosk-model-en-us-0.22" (40M/1.8G) (https://alphacephei.com/vosk/models)
+        self.model_vosk = vosk_config(model_path_vosk)
         # via vosk server websocket
+        # self.ws_url = "ws://localhost:2700"  # Vosk server WebSocket URL
+        self.get_logger().info("Vosk Small-en ready")
 
         # 2. Whisper
         model_name_whisper = "base.en" 
         self.model_whisper = whisper_config(model_name_whisper)
-        self.get_logger().info("Whisper Base.en model ready (ignore warnings)")
-
+        self.get_logger().info("Whisper Base.en ready \n")
 
     # SUBSCRIBER CALLBACK OF CS
     def listener_callback_CS(self, msg):
@@ -63,7 +67,6 @@ class VoCom_PubSub(Node):
     def running_vocom_model(self):
         '''Run the Vocal Command system if the model is active.'''
         while self.vocom_model_state:
-            self.get_logger().info("Vocal Command system is active.")
             S2T_output = self.run_S2T() 
             llm_output = self.run_T2C(S2T_output, interfere_with_model_with="ollama") # HF_transfo ollama llamacpp
             self.check_4_json() # (from command to Joy publication)
@@ -83,22 +86,22 @@ class VoCom_PubSub(Node):
         sleep_word = ["goodbye", "dubai", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by"]
         delay_for_commands = 30
 
-        self.get_logger().info("1")
-
         self.p, self.stream, metadata = open_microphone_stream()
         self.get_logger().info(f"Opened microphone stream")
-        
-        ws_url = "ws://localhost:2700"  # Vosk server WebSocket URL
 
-        self.get_logger().info(f"Speech 2 Text runnning. Waiting for wake word {wake_word[0]}")
+        # Si Vosk en local et non pas en websocket
+        rate = metadata["framerate"]
+        recognizer = vosk.KaldiRecognizer(self.model_vosk, rate) # metadata.fs
 
-        if listen_wake_word_ws(self.stream, wake_word, metadata, ws_url):
+        self.get_logger().info(f"Speech 2 Text runnning. Waiting for wake word {wake_word[0]} \n")
+
+        if listen_wake_word_local(self.stream, wake_word, metadata, recognizer):
             self.get_logger().info(f"Start listening for commands for {delay_for_commands}s max. Terminate with: {sleep_word}")
         
-            audio, text = process_audio_stream_ws(self.stream, 
+            audio, text = process_audio_stream_local(self.stream, 
                                                     sleep_word,
                                                     metadata, 
-                                                    ws_url,
+                                                    recognizer,
                                                     timeout=delay_for_commands)
             
             self.get_logger().info(f"Succesfully recorded command.") 

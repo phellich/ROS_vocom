@@ -26,22 +26,28 @@ def open_microphone_stream():
     # Advanced Linux Sound Architecture (ALSA) : API for sound card device drivers.
     # arecord -l in terminal to list audio devices
     p = pyaudio.PyAudio()                       # https://people.csail.mit.edu/hubert/pyaudio/docs/#pyaudio.PyAudio.Stream.__init__ 
-    print("EYOOO")
+    
     metadata = { 
         "chunk": 16384,  # 4096, # buffer size pour flux audio (+ grand = + de latence, + petit = + de CPU)
         "sample_format": pyaudio.paInt16,
         "nchannel": 1, # 1 pour mono, 2 pour stéréo (inutile car pas besoin de spacialisation)
         "framerate": 16000 # fréquence d'échantillonnage (Hz) (16k pour speech recognition en général, 44.1k pour musique)
     }
-    # Segementation fault
-    device_index = 2 # 2 pour le micro USB, 0 pour le micro jack
-    stream = p.open(format=metadata["sample_format"],
+    for i in range(p.get_device_count()):
+        print(p.get_device_info_by_index(i).get('name'))
+        print(p.get_device_info_by_index(i))
+        print()
+    try: 
+        stream = p.open(format=metadata["sample_format"],
                     channels=metadata["nchannel"],
                     rate=metadata["framerate"],
                     input=True,
-                    frames_per_buffer=metadata["chunk"],
-                    input_device_index=device_index) 
-    print("EYOOO BIS")
+                    frames_per_buffer=metadata["chunk"]) 
+    except Exception as e:
+        print(f"Error lors de l'ouverture du flux audio: {e}")
+        p.terminate()
+        return None, None, None
+        
     return p, stream, metadata
 
 def close_microphone_stream(p, stream):
@@ -100,8 +106,29 @@ def listen_wake_word_ws(stream, word_2_rec, metadata, ws_url):
                 print(f"Vosk: {text}")
                 if any(w in text.lower() for w in word_2_rec):
                     return True
-    finally:
+    finally: # gets executed either exception is generated or not
         ws.close()
+
+def listen_wake_word_local(stream, word_2_rec, metadata, recognizer):
+    """Lit l'audio du flux et applique une fonction de reconnaissance."""
+    while True:
+        # durée d'un chunk = (chunk_size/framerate) = 16384/16000 = 1.024s
+        audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True) 
+
+        _, wake_word_detected = recognize_speech_VOSK_local(recognizer, audio, word_2_rec)
+
+        if wake_word_detected:
+            return True
+
+def recognize_speech_VOSK_local(recognizer, audio, word_2_rec):
+    """Processes audio data and checks for the wake word."""
+    recognizer.AcceptWaveform(audio)
+    result = json.loads(recognizer.Result())
+    text = result.get("text", "")
+    word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
+    if text:
+        print(f"Vosk: {text}")
+    return text, word_2_rec_bool
 
 def recognize_speech_VOSK_ws(ws_url, audio, word_2_rec):
     """Processes audio data via Vosk WebSocket and checks for the specified word."""
@@ -121,7 +148,27 @@ def recognize_speech_VOSK_ws(ws_url, audio, word_2_rec):
         return text, word_2_rec_bool
     finally:
         ws.close()
-        
+
+def process_audio_stream_local(stream, word_2_rec, metadata, recognizer, ws_url=None, timeout=30):
+    """Processes the audio stream and applies speech recognition."""
+
+    audio_chunks, text_chunks = [], []
+    while True:
+        audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True) 
+
+        text, wake_word_detected = recognize_speech_VOSK_local(recognizer, audio, word_2_rec)
+
+        audio_chunks.append(audio)
+        text_chunks.append(text)
+
+        # If audio chunks accumulated are more than timeout seconds, return the results
+        if len(b''.join(audio_chunks)) / metadata["framerate"] > timeout*2:
+            print(f"Max audio duration of {timeout}s reached. Processing audio...")
+            return b''.join(audio_chunks), ' '.join(text_chunks)
+
+        if wake_word_detected:
+            return b''.join(audio_chunks), ' '.join(text_chunks)
+
 def process_audio_stream_ws(stream, word_2_rec, metadata, ws_url, timeout=30):
     """Processes the audio stream and applies speech recognition."""
 
@@ -141,7 +188,7 @@ def process_audio_stream_ws(stream, word_2_rec, metadata, ws_url, timeout=30):
 
         if wake_word_detected:
             return b''.join(audio_chunks), ' '.join(text_chunks)
-
+        
 # Fonctions d'audio
 def save_audio(audio, filepath, p, metadata):
     """Sauvegarde les données audio dans un fichier WAV."""
