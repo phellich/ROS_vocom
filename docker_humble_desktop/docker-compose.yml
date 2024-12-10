@@ -1,57 +1,49 @@
-services: # different containers
+services:                                                   # different containers
   vocal_command:
-    # build: . aurait aussi marché je crois
+    # build: .                                              # alternative aurait aussi marché je crois
     build:
-      context: . # current directory to build image
-      dockerfile: Dockerfile # which dockerfile to use in context dir
-    container_name: epflxplore_vocal_command # custom name of container
-    privileged: true # access to host serivce (for micro)
-    network_mode: host # The container shares the host machine's network stack. This allows it to access services running on the host as if they were local.
+      context: .                                            # current directory to build image
+      dockerfile: Dockerfile                                # which dockerfile to use in context dir
+    container_name: epflxplore_vocal_command                # custom name of container
+    privileged: true                                        # access to host serivce (for micro)
+    network_mode: host                                      # The container shares the host machine's network stack. This allows it to access services running on the host as if they were local.
     environment:
-      - DISPLAY=$DISPLAY # give display server info from host to container (GUI application=graphical user interface)
-      - QT_X11_NO_MITSHM=1 # disable MIT-SHM extension ? (not good inside docker)
-      - XAUTHORITY=/tmp/.docker.xauth # path to xauth file
-      - PULSE_SERVER=unix:/mnt/wslg/PulseServer # Ajout de la variable d'environnement pour PulseAudio
-    volumes: # partage et persiste des données entre host et container
-      # - /tmp/.X11-unix:/tmp/.X11-unix:rw # pour des GUI
-      # - /run/user/1000/at-spi:/run/user/1000/at-spi # host at-spi to container
-      - /dev:/dev # host devices to container
-      - ./requirements.txt:/home/xplore/dev_ws/src/requirements.txt # host requirements to container
-      - base_humble_desktop_home_volume:/home/xplore
+      - DISPLAY=$DISPLAY                                    # give display server info from host to container (GUI application=graphical user interface)
+      - QT_X11_NO_MITSHM=1                                  # disable MIT-SHM extension ? (not good inside docker)
+      - XAUTHORITY=/tmp/.docker.xauth                       # path to xauth file
+      - PULSE_SERVER=unix:/mnt/wslg/PulseServer             # Ajout de la variable d'environnement pour PulseAudio
+    volumes:                                                # partage et persiste des données entre host et container
+      # - /tmp/.X11-unix:/tmp/.X11-unix:rw                  # pour des GUI
+      # - /run/user/1000/at-spi:/run/user/1000/at-spi       # host at-spi to container
+      - /dev:/dev                                           # host devices to container
+      # - ./requirements.txt:/home/xplore/dev_ws/src/requirements.txt # host requirements to container
+      # - base_humble_desktop_home_volume:/home/xplore
       # tout fichier ou répertoire stocké dans le volume base_humble_desktop_home_volume sera accessible à l'intérieur du conteneur à l'emplacement /home/xplore.
       # Contrairement aux fichiers créés directement dans le conteneur, les données dans ce volume persisteront même si le conteneur est arrêté ou supprimé
-      - ./dev_ws/src:/home/xplore/dev_ws/src  # Synchronisation de src entre hôte et container
-      - /mnt/wslg:/mnt/wslg:ro # partage de données entre WSL et WSLg (partager le socket de PulseAudio avec le conteneur)
-      # - ./dev_ws/src/vocal_command_pkg/vocal_command_pkg/Vosk_Small:/home/xplore/dev_ws/src/vocal_command_pkg/vocal_command_pkg/vosk-small-en
-    devices: # host sound device to container
+      - ./dev_ws/src:/home/xplore/dev_ws/src                # Synchronisation de src entre hôte et container
+      - /mnt/wslg:/mnt/wslg:ro                              # Partage de données entre WSL et WSLg (partager le socket de PulseAudio avec le conteneur)
+    devices:                                                # host sound device to container
     # https://forums.docker.com/t/devices-and-volumes-in-docker-compose/135966
     # https://discourse.mopidy.com/t/audio-device-in-docker/4587 
     # ou alors dans docker run --device /dev/snd:/dev/snd \
       - /dev/snd
     # https://stackoverflow.com/questions/58636607/how-to-read-understand-a-docker-compose-yml-and-what-the-stdin-open-true-tty#:~:text=tty%20and%20stdin_open%20are%20analogous,project%20inside%20the%20Docker%20container. 
-    tty: true # Allocates a terminal (pseudo-TTY)  to the container for interactive commands. (TTY = Teletype, refer to the text input/output env of a computer) 
-    stdin_open: true # allows to interact with terminal opened 
-    # same as -t or -i for docker run, or -it to combine them 
-  
-  # Vosk via websocket
-  # # Si vocal_command capture l’audio via /dev/snd et le transmet à vosk_server via WebSocket, vosk_server n’a pas besoin d’accès direct au microphone.
-  # vosk_server:
-  #   image: alphacep/kaldi-en:latest  # Use Vosk English model (Kaldi server)
-  #   container_name: vosk_server
-  #   ports:
-  #     - "2700:2700"  # Expose WebSocket port
-  #   restart: unless-stopped
-  #   environment:
-  #     - LANG=C.UTF-8
-  #   volumes:
-  #     - ./dev_ws/src/vocal_command_pkg/vocal_command_pkg/Vosk_Small:/opt/vosk-model-en/model # mount Vosk model to container
-
-# device manager of windows
-# https://x410.dev/cookbook/wsl/enabling-sound-in-wsl-ubuntu-let-it-sing/ 
-# https://stackoverflow.com/questions/68310978/playing-sound-in-docker-container-on-wsl-in-windows-11 
-
+    tty: true                                               # Allocates a terminal (pseudo-TTY)  to the container for interactive commands. (TTY = Teletype, refer to the text input/output env of a computer) 
+    stdin_open: true                                        # allows to interact with terminal opened 
+                                                            # same as -t or -i for docker run, or -it to combine them 
+                                                            
 # add service of Ollama
 # https://stackoverflow.com/questions/78438394/how-to-create-an-ollama-model-using-docker-compose
+  # services:
+  #   ollama:
+  #     image: ollama/ollama:latest
+  #     container_name: ollama
+  #     ports:
+  #       - "11434:11434"
+  #     volumes:
+  #       - ollama_volume:/root/.ollama
+  #     command: ollama create mymodel -f ./Modelfile
 
-volumes: 
-  base_humble_desktop_home_volume:
+# volumes: 
+#   base_humble_desktop_home_volume:
+  # ollama_volume:
