@@ -142,7 +142,7 @@ docker exec -it epflxplore_vocal_command bash
 ros2 run vocal_command_pkg fake_cs_node
 ```
 
-5. Note: How to create a ROS package (inside a running Docker container):
+5. [Optionnal] How to create a ROS package (inside a running Docker container):
 ```sh
 cd src
 ros2 pkg create --build-type ament_python vocal_command_pkg
@@ -161,6 +161,8 @@ ros2 pkg create --build-type ament_python vocal_command_pkg
 - Confirmer elca tool pour bien flag et debut de reponses aux tickets
 - Reflechir aux pdm, rag   tiny rag, graph rag pour usage interne
 - IA automatisation, pour les RH
+
+installation: hardware should have the following folder for mic access and results output: volunme
 
 Giovanni: 
 - STOP PENDANT LA COMMANDE EXECUTION ( a tester) fait

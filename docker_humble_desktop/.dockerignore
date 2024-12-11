@@ -1,0 +1,4 @@
+dev_ws/src/models_and_results/results/
+# To keep as part of ros package architecture:
+# dev_ws/src/vocal_command_pkg/resource/
+# dev_ws/src/vocal_command_pkg/test/

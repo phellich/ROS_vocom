@@ -1,9 +1,9 @@
-# pip freeze > requirements.txt
+# # pip freeze > requirements.txt
 pydantic==2.9.2
-numpy==2.0.2
+numpy<1.25.0 
+torch==1.11.0
 pyaudio==0.2.14 
 vosk==0.3.45
 llama-cpp-python                # In Conda env: "conda install -c conda-forge ffmpeg"
 ollama==0.3.3
-openai-whisper==20240930        # to comment!!
-# transformers==4.46.2
+openai-whisper==20240930

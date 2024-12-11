@@ -280,7 +280,7 @@ class VoCom_PubSub(Node):
         while elapsed_time < self.publish_duration:
             if self.stop_event.is_set():  
                 break            
-            self.get_logger().info(f"{elapsed_time:.2f} seconds elapsed.")
+            # self.get_logger().info(f"{elapsed_time:.2f} seconds elapsed.")
             self.joy_msg.header.stamp = self.get_clock().now().to_msg()
             self.publisher_.publish(self.joy_msg)
             time.sleep(self.pub_freq_4_joy)
