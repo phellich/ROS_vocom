@@ -33,14 +33,16 @@ class VoCom_PubSub(Node):
         self.json_file_path = self.results_folder + "commands.json"
         self.p = None
         self.wake_word = ["hello", "halo", "hullo", "allo", "jello", "fellow", "yellow", "he low", "hell oh"]
-        self.sleep_word = ["goodbye", "dubai", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by", "good pie", "good bi", "good bai", "good bie", "good bae", "good bay", "good pay"]
+        self.sleep_word = ["goodbye", "good way", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by", "good pie", "good bi", "good bai", "good bie", "good bae", "good bay", "good pay"]
         self.delay_2_give_commands = 30
-        self.LLM_model_choice = "llamacpp"                                                                  # "HF_transfo" "llamacpp" "ollama"
         self.get_logger().info('\n\nHuman-Rover communication node has started. Please activate model via CS')
 
         # PUBLISHER
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=10)
-        self.publisher_ = self.create_publisher(Joy, "fake_cs_response", qos_profile)                       # /CS/NAV_gamepad
+        self.publisher_nav = self.create_publisher(Joy, "fake_cs_response", qos_profile)                       # /CS/NAV_gamepad
+        # self.publisher_drill = self.create_publisher(Joy, "fake_drill_response", qos_profile)                   # /CS/DRILL_gamepad
+        # self.publisher_cam = self.create_publisher(Joy, "fake_cam_response", qos_profile)                       # /CS/CAM_gamepad
+
 
         # SERVICE                                                                                           # https://docs.ros.org/en/noetic/api/std_srvs/html/srv/SetBool.html 
         self.service_ = self.create_service(SetBool, 'activation_service', self.handle_activation_request)  
@@ -156,44 +158,19 @@ class VoCom_PubSub(Node):
         Output: llm_output (dict) - LLM generation (usually a JSON) saved in a file.
         '''
 
-        if self.LLM_model_choice == "ollama":
-            prompt_name = "final"
-            prompt = get_prompt(prompt_name, S2T_output)
-            # self.get_logger().info(f"Prompt: \n{prompt}")
-            if self.stop_event.is_set():
-                return None
-            llm_output = call_ollama(prompt, model_name="llama3.2")                                     # "llama3.2:1b"
-        
-        elif self.LLM_model_choice == "HF_transfo":                                                     # need log in
-            prompt_name = "final"
-            prompt = get_prompt(prompt_name, S2T_output)
-            # self.get_logger().info(f"Prompt: \n{prompt}")
-            tokenizer, model = load_tokenizer_model("meta-llama/Llama-3.2-3B")                          # , path_to_cache=None self.models_folder
-
-            self.get_logger().info(f"torch.cuda.is_available is {torch.cuda.is_available()}")           # Doit renvoyer True si CUDA est activé
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            
-            model.to(device)   
-            
-            llm_output_long = generate_text(model, tokenizer, prompt, device, max_length=260)           # around 50 tokens per commands
-            save_json(llm_output_long, self.results_folder, f"Commands_interm_HF")                    
-            llm_output = extract_first_json(llm_output_long)
-
-        elif self.LLM_model_choice == "llamacpp":                                                       # llamacpp => on .venv environment
-            llm = Llama(
-                model_path= self.models_folder + "Llama-3.2-3B-Instruct-Q6_K_L.gguf",
-                n_ctx = 512,
-                verbose= False
-            )
-            system_prompt, json_schema = prepare_llama_cpp_generation()
-            # self.get_logger().info(f"Prompt: \n{system_prompt}")
-            # self.get_logger().info(f"JSON: \n{json_schema}")
-            if self.stop_event.is_set():
-                return None
-            llm_output = llama_cpp_generation(llm, system_prompt, S2T_output, json_schema)
+        llm = Llama(
+            model_path= self.models_folder + "Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+            n_ctx = 512,
+            verbose= False
+        )
+        system_prompt, json_schema = prepare_llama_cpp_generation()
+        # self.get_logger().info(f"Prompt: \n{system_prompt}")
+        # self.get_logger().info(f"JSON: \n{json_schema}")
+        if self.stop_event.is_set():
+            return None
+        llm_output = llama_cpp_generation(llm, system_prompt, S2T_output, json_schema)
 
         save_json(llm_output, self.results_folder, f"commands")                                         # _1B # _HF
-        # validate_json_struct(llm_output, "flat") 
         self.get_logger().info(f"JSON generated (Llama 3.2 3B): \n{llm_output}\n")
 
         return llm_output
@@ -224,10 +201,23 @@ class VoCom_PubSub(Node):
             with open(self.json_file_path, 'r') as f:
                 data = json.load(f)
                 self.commands = data.get("commands", [])
-                self.get_logger().info(f'Loaded sequence of {len(self.commands)} commands.')
+                self.nav_execution_speed = self.get_nav_speed(data)
+                self.get_logger().info(f'Loaded sequence of {len(self.commands)} commands and {self.nav_execution_speed} nav command execution.')
         except (json.JSONDecodeError, FileNotFoundError) as e:
             self.get_logger().error(f"Error reading commands.json: {e}")
 
+    def get_nav_speed(self, data):
+        """Get the navigation speed from the JSON file."""
+        # sentiment analysis text
+        # sentiment analysis audio
+        nav_speed = data.get("nav_execution_speed", "default")
+        nav_speed = (
+            0.5 if nav_speed == "slow" 
+            else 1.5 if nav_speed == "fast" 
+            else 1.0 # default
+        )                                              
+        return nav_speed
+    
     def publish_cmd_as_joy(self, cmd): 
         """Translate command into Joy message and publish the command to the topic."""
         self.joy_msg = Joy()
@@ -242,12 +232,12 @@ class VoCom_PubSub(Node):
             if cmd['direction'] not in ['forward', 'backward']:
                 return                                                                                  # Skip publishing for invalid directions
             self.distance = cmd.get("distance", 0)
-            self.safety_speed_distance = 0.5                                                            # = 0.5 m/s ?
-            self.publish_duration = self.distance / self.safety_speed_distance if self.distance else 0.0
+            self.default_speed_moving = 0.5 * self.nav_execution_speed                                                           # = 0.5 m/s ?
+            self.publish_duration = self.distance / self.default_speed_moving if self.distance else 0.0
 
-            concerned_axe = 5 if cmd['direction'] == 'forward' else 2
-            self.joy_msg.axes[concerned_axe] = self.safety_speed_distance                               # pas le meme axe si pos ou neg 
-            self.get_logger().info(f"Publishing for {self.publish_duration:.2f} seconds at frequency {self.pub_freq_4_joy:.2f} and safety speed {self.safety_speed_distance} m/s.")
+            concerned_axe = 5 if cmd['direction'] == 'forward' else 2                                   # GP_axis_R2 = 5 (forward) and GP_axis_L2 = 2 (backward)
+            self.joy_msg.axes[concerned_axe] = self.default_speed_moving  
+            self.get_logger().info(f"Publishing for {self.publish_duration:.2f} seconds at frequency {self.pub_freq_4_joy:.2f} and safety speed {self.default_speed_moving} m/s.")
 
         elif cmd['command'] == 'turn':
             if cmd['direction'] not in ['left', 'right', '180_turn', '360_turn']:
@@ -260,11 +250,12 @@ class VoCom_PubSub(Node):
                 cmd['angle'] = 360
                 
             self.angle = np.radians(cmd.get("angle", 0)) if cmd.get("angle", 0) else 0
-            self.safety_speed_angle = 0.8                                                               # = 0.8 rad/s?
-            self.publish_duration = self.angle / self.safety_speed_angle                                # angle not distance!
+            self.default_speed_angle = 0.5 * self.nav_execution_speed                                                              # = 0.8 rad/s?
+            self.publish_duration = self.angle / self.default_speed_angle                                # angle not distance!
 
+            # rajouter le bouttons crab?  rajouter dans la doc
             concerned_axe = 0
-            self.joy_msg.axes[concerned_axe] = self.safety_speed_angle if cmd['direction'] == 'right' else -self.safety_speed_angle # par défaut tourner a gauche si direction is 180 or 360_turn
+            self.joy_msg.axes[concerned_axe] = self.default_speed_angle if cmd['direction'] == 'right' else -self.default_speed_angle # par défaut tourner a gauche si direction is 180 or 360_turn
             self.get_logger().info(f"Publishing for {self.publish_duration:.2f} seconds at frequency {self.pub_freq_4_joy:.2f} and safety speed {self.safety_speed_angle} rad/s.")
 
         elif cmd['command'] in ['not_a_command', 'not a command']:
@@ -282,14 +273,14 @@ class VoCom_PubSub(Node):
                 break            
             # self.get_logger().info(f"{elapsed_time:.2f} seconds elapsed.")
             self.joy_msg.header.stamp = self.get_clock().now().to_msg()
-            self.publisher_.publish(self.joy_msg)
+            self.publisher_nav.publish(self.joy_msg)
             time.sleep(self.pub_freq_4_joy)
             elapsed_time = time.time() - self.start_time
         
         self.joy_msg.axes = [0.0] * 6
         self.joy_msg.buttons = [0] * 9
         self.joy_msg.header.stamp = self.get_clock().now().to_msg()
-        self.publisher_.publish(self.joy_msg)
+        self.publisher_nav.publish(self.joy_msg)
         self.get_logger().info("Completed publishing duration. \n\n")
 
 def main(args=None):

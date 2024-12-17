@@ -66,6 +66,44 @@ This component converts the unstructured, transcribed vocal instructions into a 
 }
 ``` 
 
+# WORK IN PROGRESS
+```json
+{
+  "execution_speed": "string (either fast, slow, or default)",
+  "commands": [
+    {
+      "command": "string (either 'displacement', 'rotation', 'drill' or 'not_a_command')",
+      "direction": "string (either 'forward', 'backward', 'right', 'left', '180_turn', '360_turn' or null, depending on the command)",
+      "distance": "positive integer (Distance in meters, or null)",
+      "angle": "positive integer (Rotation angle in degrees, or null)",
+      "drill_additional_info": "string (if any, details on drill instruction)",
+    }
+  ]
+}
+``` 
+
+```json
+{
+  "execution_speed": "string (either fast, slow, or default)",
+  "commands": [
+    {
+      "command": "string (either 'displacement', 'rotation', 'drill', or 'not_a_command'). Depending on the value of 'command', other fields are populated as follows:
+   - 'displacement': Requires 'direction' and 'distance'.
+   - 'rotation': Requires 'direction' (as '180_turn' or '360_turn') and 'angle'.
+   - 'drill': Requires 'drill_additional_info'.
+   - 'not_a_command': All other fields must be null.",
+      "direction": "string (either 'forward', 'backward', 'right', 'left', '180_turn', '360_turn' or null, depending on the command)",
+      "distance": "positive integer (in meters, null otherwise)",
+      "angle": "positive integer (in degrees, null otherwise)",
+      "drill_additional_info": "string (optional, details on drill instruction, or null if not applicable)"
+    }
+  ]
+}
+``` 
+
+if null, do everything sequentially? Check for nav mode or not and return error if nav command after drill without stop
+
+
 This schema was chosen for two reasons:
 1. It is easier for the LLM to generate a valid instance (flat easier than nested).
 2. It simplifies the addition of new commands.
@@ -96,6 +134,8 @@ See the next section for details about command interpretation for execution:
 
 For both navigation commands, the publication duration is calculated using the formula $ t = \frac{d}{v} $.
 
+At any time, you can deactivate the Vocal command system and it will stop (including during a continous publication of Joy message, so it is safe is there is a critc situation). 
+
 
 ## Accepted commands
 The currently accepted commands are:
@@ -103,6 +143,10 @@ The currently accepted commands are:
 - `move`: Requires the `direction` field (either `forward` or `backward`) and the `distance` field (in meters, positive integer). If no `distance` is specified, the rover will not move. If a `distance` is specified but no `direction`, the rover defaults to moving forward.
 
 - `turn`: Requires the `direction` field (either `left`, `right`, `180_turn`, or `360_turn`) and the `angle` field (in degrees, positive integer). If `direction` is `left` or `right` with angle as null or 0, it defaults to turning 90 degrees. If the `direction` is `180_turn` or `360_turn` but no `left` or `right` is specified, it defaults to turning left.
+
+E.g., if you want to go diagonnally, first indicate to turn an angle and then to advance in that direction. 
+Drill + manual nav ou auto mode + mode de deplacement normal ou latéral. Dire qu'on fait seq et que les rotations sont en mode de deplacement crab. 
+
 
 ## Installation
 
@@ -161,8 +205,9 @@ ros2 pkg create --build-type ament_python vocal_command_pkg
 - Confirmer elca tool pour bien flag et debut de reponses aux tickets
 - Reflechir aux pdm, rag   tiny rag, graph rag pour usage interne
 - IA automatisation, pour les RH
+- ajouter une key json execution speed (fast, slow, default)
 
-installation: hardware should have the following folder for mic access and results output: volunme
+installation: hardware should have the following folder for mic access and results output: volunme in dockecompose
 
 Giovanni: 
 - STOP PENDANT LA COMMANDE EXECUTION ( a tester) fait

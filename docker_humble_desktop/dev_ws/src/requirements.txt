@@ -1,4 +1,4 @@
-# # pip freeze > requirements.txt
+# pip freeze > requirements.txt
 pydantic==2.9.2
 numpy<1.25.0 
 torch==1.11.0

@@ -45,5 +45,4 @@ docker compose build
 # Up the container (vs Run)
 echo "Running the container with Docker Compose..."
 docker compose up -d            
-# Run overrides docker-compose so use Up instead:
-# docker-compose run --service-ports vocal_command /bin/bash -d # start container for vocal_command service and open a terminal with /bin/bash
+# Run overrides docker-compose so use Up instead: docker-compose run --service-ports vocal_command /bin/bash -d # start container for vocal_command service and open a terminal with /bin/bash
