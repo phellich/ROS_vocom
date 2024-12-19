@@ -2,16 +2,13 @@ import numpy as np
 import wave
 import pyaudio
 import json
-import vosk
 import whisper
 import warnings
 import json
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from typing import Literal, Optional, List
-import re
-# from transformers import AutoTokenizer, AutoModelForCausalLM
-# import torch
-# import ollama
+from collections import deque
+import time
 
 ################################################
 ## SPEECH 2 TEXT                              ##
@@ -66,7 +63,7 @@ def close_microphone_stream(p, stream):
     stream.close()
     p.terminate()
 
-# Vosk and Whisper configuration and speech recognition functions
+# Whisper configuration and speech recognition functions
 def whisper_config(model_name):
     """Initialise Whisper model."""
     warnings.filterwarnings("ignore", category=FutureWarning, module="whisper")
@@ -74,14 +71,8 @@ def whisper_config(model_name):
     whisper_model = whisper.load_model(model_name)
     return whisper_model
 
-def vosk_config(model_path):
-    """Initialise Vosk model."""
-    vosk.SetLogLevel(-1)                                                            # -1 pour désactiver les logs
-    vosk_model = vosk.Model(model_path)
-    return vosk_model
-
 # Fonctions Speech recognition
-def recognize_speech_WHISPER(model, audio, audio_path=None):                        # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text
+def recognize_speech_WHISPER(model, audio, audio_path=None, word_2_rec=None, whisper_model="Whisper Base.en", whisper_prompt=None):                        # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text
     """Processes audio data and checks for the wake word."""
     if audio_path:
         # Charger et préparer l'audio depuis un fichier si un chemin est fourni
@@ -90,52 +81,108 @@ def recognize_speech_WHISPER(model, audio, audio_path=None):                    
         # Convertir les données `bytes` en un tableau numpy de type float32 normalisé
         audio = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
 
+    # https://github.com/openai/whisper/blob/main/whisper/transcribe.py
+
+    # start = time.time()
     text = model.transcribe(audio)['text']
+    # print(f"Param 0: {time.time()-start:.2f}s")
 
-    return text
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         language="en",
+    #                         task="transcribe"
+    #                         )['text']
+    # print(f"Param 1: {time.time()-start:.2f}s")
 
-def wait_4_wake_word(stream, word_2_rec, metadata, recognizer):
-    """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
-    while True:
-        # durée d'un chunk = (chunk_size/framerate) = 16384/16000 = 1.024s
-        audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True)
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         fp16=False
+    #                         )['text']
+    # print(f"Param 2: {time.time()-start:.2f}s")
 
-        _, wake_word_detected = recognize_speech_VOSK(recognizer, audio, word_2_rec)
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         temperature=0
+    #                         )['text']
+    # print(f"Param 3: {time.time()-start:.2f}s")
 
-        if wake_word_detected:
-            return True
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         beam_size=1, 
+    #                         best_of=1
+    #                         )['text']
+    # print(f"Param 4: {time.time()-start:.2f}s")
 
-def recognize_speech_VOSK(recognizer, audio, word_2_rec):
-    """Processes the audio data and applies speech recognition using Vosk."""
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         logprob_threshold=-3.0, # default=-1.0
+    #                         no_speech_threshold=0.3 # default=0.6
+    #                         )['text']
+    # print(f"Param 5: {time.time()-start:.2f}s")
 
-    recognizer.AcceptWaveform(audio)
-    result = json.loads(recognizer.Result())
-    text = result.get("text", "")
-    word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
-    if text:
-        print(f"Vosk: {text}")
+    # start = time.time()
+    # text = model.transcribe(audio,
+    #                         initial_prompt=whisper_prompt
+    #                         )['text']
+    # print(f"Param 6: {time.time()-start:.2f}s")
+
+    word_2_rec_bool = False
+    if word_2_rec:
+        word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
+        if text:
+            print(f"{whisper_model}: {text.lower()}")
     return text, word_2_rec_bool
 
-def wait_4_sleep_word(stream, word_2_rec, metadata, recognizer, timeout=30):
+def wait_4_wake_word(stream, word_2_rec, metadata, model):
+    """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
+
+    q= deque()
+    while True:
+
+        if len(q) > 5:
+            q.popleft() 
+  
+        audio = stream.read(metadata["chunk"], exception_on_overflow=True) 
+
+        q.append(audio)       
+
+        # start = time.time()
+        _, wake_word_detected = recognize_speech_WHISPER(model, 
+                                                        #  audio, 
+                                                         b"".join(q), # audio,
+                                                         word_2_rec=word_2_rec, 
+                                                         whisper_model="Whisper Tiny.en",
+                                                         whisper_prompt=f"Start listening for wake word {word_2_rec[0]}.")
+        # print(f"Time for 5 chunk: {time.time()-start:.2f}s")
+
+        if wake_word_detected:
+            q.clear()
+            return True
+
+def wait_4_sleep_word(stream, word_2_rec, metadata, model, timeout=30):
     """
     Processes audio and checks for the sleep word. 
     Concatenate audio chunks and return full audio and text recognized by Vosk when sleep word is detected or timeout time is reached."""
 
-    audio_chunks, text_chunks = [], []
+    audio_chunks = []
     while True:
-        audio = stream.read(metadata["chunk"]*4, exception_on_overflow=True)
-
-        text, wake_word_detected = recognize_speech_VOSK(recognizer, audio, word_2_rec)
-
+        audio = stream.read(metadata["chunk"], exception_on_overflow=True)
         audio_chunks.append(audio)
-        text_chunks.append(text)
 
-        if len(b''.join(audio_chunks)) / metadata["framerate"] > timeout*2:         # If audio chunks accumulated are more than timeout seconds, return the results
+        start = time.time()
+        _, wake_word_detected = recognize_speech_WHISPER(model, 
+                                                         b"".join(audio_chunks[-5:]), 
+                                                         word_2_rec=word_2_rec,
+                                                         whisper_model="Whisper Tiny.en",
+                                                         whisper_prompt=f"Start listening for end of command word {word_2_rec[0]}.")
+        print(f"Time for 5 chunk: {time.time()-start:.2f}s")
+
+        if len(b''.join(list(audio_chunks))) / metadata["framerate"] > timeout*2:         # If audio chunks accumulated are more than timeout seconds, return the results
             print(f"Max audio duration of {timeout}s reached. Processing audio...")
-            return b''.join(audio_chunks), ' '.join(text_chunks)
+            return b"".join(audio_chunks)
 
         if wake_word_detected:
-            return b''.join(audio_chunks), ' '.join(text_chunks)
+            return b"".join(audio_chunks)
 
 # Fonctions d'audio
 def save_audio(audio, filepath, p, metadata):
@@ -182,15 +229,16 @@ def prepare_llama_cpp_generation():
     """Prepare the system prompt and JSON schema for LlamaCPP generation."""
 
     class RoverCommand(BaseModel):
-        command: Literal["displacement", "rotation", "drill", "cameras", "not_a_command"] = Field(description=("Type of command to execute."))
+        command: Literal["move", "turn", "drill", "cameras", "not_a_command"] = Field(description=("Type of command to execute."))
         direction: Optional[Literal["forward", "backward", "right", "left", "180_turn", "360_turn"]] = Field(None, description="Direction of movement or rotation, depending on the command")
-        distance: Optional[int] = Field(None, description="Positive integer representing distance in meters, null otherwise")
-        angle: Optional[int] = Field(None, description="Positive integer representing rotation angle in degrees, null otherwise")
-        drill_additional_info: Optional[str] = Field(None, description="Optional string with details for drill instruction, null otherwise")
-        cameras_state: Optional[Literal["turn_on", "turn_off"]] = Field(None, description="Change of state of the cameras, either 'turn_on' or 'turn_off'")
+        execution_speed: Optional[Literal["fast", "slow", "default"]] = Field(None, description="Execution speed for the mission")
+        distance: Optional[float] = Field(None, description="Distance in meters, null otherwise")
+        angle: Optional[float] = Field(None, description="Rotation angle in degrees, null otherwise")
+        camera_toggle: Optional[Literal["turn_on", "turn_off"]] = Field(None, description="Indicates whether to turn the cameras on or off, null otherwise")
+        drill_rotation_speed: Optional[int] = Field(None, description="Optional drill rotation speed, null otherwise") # in what unit??
+        drill_distance_ratio: Optional[float] = Field(None, description="Optional drill distance ratio, null otherwise") # ratio of what??
 
     class MissionPlan(BaseModel):
-        execution_speed: Literal["fast", "slow", "default"] = Field(description="Execution speed for the mission")
         commands: List[RoverCommand] = Field(description="List of commands to be executed by the rover")
 
     json_schema = MissionPlan.model_json_schema()
@@ -199,7 +247,7 @@ def prepare_llama_cpp_generation():
 
 Examples:
 
-Input: "Spin rapidly on yourself 1/3 to the right"
+Input: "Spin on yourself 1/3 to the right"
 Output:
 {
   "commands": [
@@ -208,17 +256,37 @@ Output:
       "direction": "right",
       "angle": 120
     }
-  ],
-  "execution_speed": "fast"
+  ]
 }
 
-Input: "Please turn gradualy left 90 degrees and then drive backwards a little, maybe one meter."
+Input: "Advance quickly 12 meters, stop, turn on the cameras and finally drill a hole."
+Output:
+{
+  "commands": [
+    {
+      "command": "move",
+      "direction": "forward",
+      "execution_speed": "fast",
+      "distance": 12,
+    },
+    {
+      "command": "cameras",
+      "camera_toggle": "turn_on"
+    },
+    {
+      "command": "drill"
+    }
+  ]
+}
+
+Input: "Please turn slowly left 90 degrees and then drive backwards a little, maybe one meter."
 Output:
 {
   "commands": [
     {
       "command": "turn",
       "direction": "left",
+      "execution_speed": "slow",
       "angle": 90
     },
     {
@@ -226,28 +294,7 @@ Output:
       "direction": "backward",
       "distance": 1
     }
-  ],
-  "execution_speed": "slow"
-}
-
-Input: "Advance quickly 12 meters, stop, turn on the cameras and drill a hole."
-Output:
-{
-  "commands": [
-    {
-      "command": "move",
-      "direction": "forward",
-      "distance": 12
-    },
-    {
-      "command": "cameras",
-      "cameras_state": "turn_on"
-    },
-    {
-      "command": "drill",
-      "drill_additional_info": "a hole"
-  ],
-  "execution_speed": "fast"
+  ]
 }"""
 
     return system_prompt, json_schema

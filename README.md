@@ -53,34 +53,6 @@ Below is an example demonstrating the improvement between Vosk and Whisper for s
 ### 2. Text-to-Commands
 
 This component converts the unstructured, transcribed vocal instructions into a structured JSON format. The JSON contains a series of commands, each with specific properties and details. The schema is as follows:
-```json
-{
-  "commands": [
-    {
-      "command": "string (either 'displacement', 'rotation' or 'not_a_command')",
-      "direction": "string (either 'forward', 'backward', 'right', 'left', '180_turn', '360_turn' or null, depending on the command)",
-      "distance": "positive integer (Distance in meters, or null)",
-      "angle": "positive integer (Rotation angle in degrees, or null)"
-    }
-  ]
-}
-``` 
-
-# WORK IN PROGRESS
-```json
-{
-  "execution_speed": "string (either fast, slow, or default)",
-  "commands": [
-    {
-      "command": "string (either 'displacement', 'rotation', 'drill' or 'not_a_command')",
-      "direction": "string (either 'forward', 'backward', 'right', 'left', '180_turn', '360_turn' or null, depending on the command)",
-      "distance": "positive integer (Distance in meters, or null)",
-      "angle": "positive integer (Rotation angle in degrees, or null)",
-      "drill_additional_info": "string (if any, details on drill instruction)",
-    }
-  ]
-}
-``` 
 
 ```json
 {
@@ -100,9 +72,6 @@ This component converts the unstructured, transcribed vocal instructions into a 
   ]
 }
 ``` 
-
-if null, do everything sequentially? Check for nav mode or not and return error if nav command after drill without stop
-
 
 This schema was chosen for two reasons:
 1. It is easier for the LLM to generate a valid instance (flat easier than nested).
@@ -229,3 +198,9 @@ drill down up)
 
 - 134G ca passe (nav c'est 15)
 - l'ancienne va pas supporter , en attente des nouvelles qui sont censees etre arrivées de puis 2 semaines
+
+Idées: 
+  Version avec live Whisper, 
+  continuer la SER (train?), 
+  continuer la sentiment analysis (text)
+  refaire une démo plus complète

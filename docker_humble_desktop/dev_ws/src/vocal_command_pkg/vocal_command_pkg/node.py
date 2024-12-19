@@ -2,9 +2,8 @@ import json
 import os 
 import numpy as np
 import rclpy
-import vosk
 from rclpy.node import Node
-# from std_msgs.msg import Bool
+# from custom_msg.msg import ScDrillCmds
 from std_srvs.srv import SetBool
 from sensor_msgs.msg import Joy
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
@@ -25,7 +24,7 @@ class VoCom_PubSub(Node):
         self.model_thread = None
         self.stop_event = threading.Event() 
 
-        self.pub_freq_4_joy = 0.1                                                                          # sec
+        self.pub_freq_4_joy = 0.5                                                                          # sec
         self.commands = []                                                                                
         self.last_modified_time = None                                                                      # Track the last modified time commands.json
         self.results_folder = "/home/xplore/dev_ws/src/vocal_command_pkg/models_and_results/results/"
@@ -35,31 +34,39 @@ class VoCom_PubSub(Node):
         self.wake_word = ["hello", "halo", "hullo", "allo", "jello", "fellow", "yellow", "he low", "hell oh"]
         self.sleep_word = ["goodbye", "good way", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by", "good pie", "good bi", "good bai", "good bie", "good bae", "good bay", "good pay"]
         self.delay_2_give_commands = 30
-        self.get_logger().info('\n\nHuman-Rover communication node has started. Please activate model via CS')
+        self.initialize_models()
+        self.get_logger().info('Human-Rover communication node has started. Please activate model via CS')
 
         # PUBLISHER
+        # qos_profile = QoSProfile(
+        #     reliability=QoSReliabilityPolicy.BEST_EFFORT, # BEST_EFFORT: message will attempt to send message but if it fails it will not try again
+        #     durability=QoSDurabilityPolicy.VOLATILE, # VOLATILE: if no subscribers are listening, the message sent is not saved
+        #     history=QoSHistoryPolicy.KEEP_LAST, # KEEP_LAST: only the last n = depth messages are stored in the queue
+        #     depth=1,
+        # )
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=10)
         self.publisher_nav = self.create_publisher(Joy, "fake_cs_response", qos_profile)                       # /CS/NAV_gamepad
-        # self.publisher_drill = self.create_publisher(Joy, "fake_drill_response", qos_profile)                   # /CS/DRILL_gamepad
-        # self.publisher_cam = self.create_publisher(Joy, "fake_cam_response", qos_profile)                       # /CS/CAM_gamepad
+        # self.publisher_drill = self.create_publisher(ScDrillCmds, "fake_CS_drill_publi", qos_profile)                   # /SC/drill_cmd
 
-
+        
         # SERVICE                                                                                           # https://docs.ros.org/en/noetic/api/std_srvs/html/srv/SetBool.html 
-        self.service_ = self.create_service(SetBool, 'activation_service', self.handle_activation_request)  
+        self.service_ = self.create_service(SetBool, 'vocom_activation_service', self.handle_activation_request)  
+        self.cam_client = self.create_client(SetBool, 'topic_service')                                   # See details in camera command pub
+        # while not self.client.wait_for_service(timeout_sec=2.0):
+        #     self.get_logger().info('En attente que le service "topic_service" soit disponible...')
 
-        # Initialisation du modèle
-        self.initialize_models()
+        # FOR TEST
+        self.vocom_model_state = True
+        self.model_thread = threading.Thread(target=self.running_vocom_model, daemon=True)
+        self.model_thread.start()
 
     def initialize_models(self):
-        """Initialize Vosk and Whisper models."""
-        # 1. Vosk
-        model_path_vosk = self.models_folder + "Vosk_Small/"                                                # "vosk-model-en-us-0.22" (40M/1.8G) (https://alphacephei.com/vosk/models)
-        self.model_vosk = vosk_config(model_path_vosk)
-        self.get_logger().info("Vosk Small-en ready")
+        """Initialize Whisper models."""
 
-        # 2. Whisper
-        model_name_whisper = "base.en"                                                                      # https://github.com/openai/whisper/discussions/1463
-        self.model_whisper = whisper_config(model_name_whisper)
+        self.model_whisper_tiny_en = whisper_config("tiny.en")
+        self.get_logger().info("Whisper Tiny.en ready")                                                      # https://github.com/openai/whisper/discussions/1463
+        
+        self.model_whisper_base_en = whisper_config("base.en")
         self.get_logger().info("Whisper Base.en ready")
 
     def handle_activation_request(self, request, response):
@@ -97,6 +104,7 @@ class VoCom_PubSub(Node):
             S2T_output = self.run_S2T()
             if self.stop_event.is_set():                                                                    # Vérifie si l'arrêt a été demandé pendant S2T
                 break
+            # S2T_output = "Drill" # TESTING
             llm_output = self.run_T2C(S2T_output)
             if self.stop_event.is_set():  
                 break
@@ -114,23 +122,19 @@ class VoCom_PubSub(Node):
         '''
 
         self.p, self.stream, metadata = open_microphone_stream()
-        self.get_logger().info(f"\n\n\nOpened microphone stream")
 
-        rate = metadata["framerate"]
-        recognizer = vosk.KaldiRecognizer(self.model_vosk, rate)                                            # rate = metadata.fs
+        self.get_logger().info(f"\n\n\nOpened microphone stream. Speech 2 Text runnning. Waiting Wake-word: {self.wake_word[0]} \n")
 
-        self.get_logger().info(f"Speech 2 Text runnning. Waiting Wake-word: {self.wake_word[0]} \n")
-
-        if wait_4_wake_word(self.stream, self.wake_word, metadata, recognizer):
+        if wait_4_wake_word(self.stream, self.wake_word, metadata, self.model_whisper_tiny_en):
             if self.stop_event.is_set():
                 return None
 
             self.get_logger().info(f"Start listening for commands for {self.delay_2_give_commands}s max. Terminate with: {self.sleep_word[0]}")
         
-            audio, text = wait_4_sleep_word(self.stream, 
+            audio = wait_4_sleep_word(self.stream, 
                                                 self.sleep_word,
                                                 metadata, 
-                                                recognizer,
+                                                self.model_whisper_tiny_en,
                                                 timeout=self.delay_2_give_commands)
             
             if self.stop_event.is_set():
@@ -139,16 +143,18 @@ class VoCom_PubSub(Node):
             self.get_logger().info(f"Succesfully recorded command.") 
 
             save_audio(audio, self.results_folder+"audio.wav", self.p, metadata)
-            with open(self.results_folder + "text_vosk.txt", "w") as output_file:
+
+            text, _ = recognize_speech_WHISPER(self.model_whisper_tiny_en, audio)
+            with open(self.results_folder + "text_whisper_tiny.txt", "w") as output_file:
                 output_file.write(text)
 
-            text = recognize_speech_WHISPER(self.model_whisper, audio)
+            text, _ = recognize_speech_WHISPER(self.model_whisper_base_en, audio)
             with open(self.results_folder + "text_whisper.txt", "w") as output_file:
                 output_file.write(text)
 
             close_microphone_stream(self.p, self.stream) 
 
-            self.get_logger().info(f"Whisper: \n{text} \n")
+            self.get_logger().info(f"Whisper Base.en: \n{text} \n")
             return text
 
     def run_T2C(self, S2T_output): 
@@ -160,7 +166,7 @@ class VoCom_PubSub(Node):
 
         llm = Llama(
             model_path= self.models_folder + "Llama-3.2-3B-Instruct-Q6_K_L.gguf",
-            n_ctx = 512,
+            n_ctx = 700,
             verbose= False
         )
         system_prompt, json_schema = prepare_llama_cpp_generation()
@@ -189,7 +195,7 @@ class VoCom_PubSub(Node):
                 self.last_modified_time = current_modified_time
                 self.load_commands_from_json()
                 for cmd in self.commands:
-                    self.publish_cmd_as_joy(cmd)
+                    self.publish_cmd_general(cmd) if cmd['command'] in ['drill', 'cameras', 'camera'] else self.publish_cmd_as_joy(cmd)
                 self.commands = []                                                                      # Clear commands after publishing
         else:
             self.get_logger().warning("New commands.json not found")
@@ -202,7 +208,7 @@ class VoCom_PubSub(Node):
                 data = json.load(f)
                 self.commands = data.get("commands", [])
                 self.nav_execution_speed = self.get_nav_speed(data)
-                self.get_logger().info(f'Loaded sequence of {len(self.commands)} commands and {self.nav_execution_speed} nav command execution.')
+                self.get_logger().info(f'Loaded sequence of {len(self.commands)} commands with nav command execution speed of {self.nav_execution_speed}.')
         except (json.JSONDecodeError, FileNotFoundError) as e:
             self.get_logger().error(f"Error reading commands.json: {e}")
 
@@ -218,21 +224,57 @@ class VoCom_PubSub(Node):
         )                                              
         return nav_speed
     
+    def publish_cmd_general(self, cmd): 
+        if cmd['command'] == 'drill':                                                                   # publie un message comme une fake CS qui demande de lancer le drill
+
+            # drill_msg = ScDrillCmds()
+            # drill_msg.mode = 'auto'
+
+            rotation_speed = float(cmd.get('drill_rotation_speed', 78000000))
+            distance_ratio = cmd.get('drill_distance_ratio', 1.0)
+
+            self.get_logger().info(f"Drill command 'auto': rotation speed: {rotation_speed}, distance ratio: {distance_ratio}")
+
+            # drill_msg.send_parameter = True
+            # drill_msg.rotation_speed = rotation_speed
+            # drill_msg.distance_ratio = distance_ratio
+
+            # self.publisher_drill.publish(drill_msg) 
+            # publie rpour une certaine durée? 
+            # check good deroulé? 
+            
+        elif cmd['command'] in ['cameras', 'camera']:
+            new_camera_state = cmd.get('cameras_state', 'turn_on')
+            self.get_logger().info(f"New camera state: {new_camera_state}")
+
+            cam_request = SetBool.Request()
+            cam_request.data = True if new_camera_state == 'turn_on' else False
+            future = self.cam_client.call_async(cam_request)    # Call the service asynchronously
+            future.add_done_callback(self.handle_service_response)   # Attach a callback for when the future completes
+
+            # In https://github.com/EPFLXplore/ERC_CAMERAS/blob/245691682c4bc95f63ebdcfe069caf849a5b4708/camera/camera/camera_node.py :
+            # # Service to activate the camera. For now we hardcode the parameters so we use just a SetBool
+            # self.declare_parameter("topic_service", self.default)
+            # self.service_topic = self.get_parameter("topic_service").get_parameter_value().string_value
+            # self.service_activation = self.create_service(SetBool, self.service_topic, self.start_cameras_callback)
+            # Initialize publishers to publish results: 
+            # self.cam_pubs = self.create_publisher(CompressedImage, self.publisher_topic, 1, callback_group=self.callback_group)
+            # self.cam_bw = self.create_publisher(Float32, self.publisher_topic_bw, 1)
+
     def publish_cmd_as_joy(self, cmd): 
         """Translate command into Joy message and publish the command to the topic."""
         self.joy_msg = Joy()
         self.joy_msg.axes = [0.0] * 6
-        self.joy_msg.buttons = [0] * 9
-        self.joy_msg.buttons[1] = 0                                                                     # auto state deactivate
-        self.joy_msg.buttons[2] = 1                                                                     # manual state activate
-        self.joy_msg.buttons[8] = 0                                                                     # change_kinematic_state
+        self.joy_msg.buttons = [0] * 9  
+        # self.joy_msg.buttons[0] = 0                                                                   # Cross on PS4: switch between normal and lateral displacement mode
+        # self.joy_msg.buttons[1] = 0                                                                   # Round on PS4: switch between manual and auto nav mode
 
         if cmd['command'] == 'move':
             
             if cmd['direction'] not in ['forward', 'backward']:
                 return                                                                                  # Skip publishing for invalid directions
             self.distance = cmd.get("distance", 0)
-            self.default_speed_moving = 0.5 * self.nav_execution_speed                                                           # = 0.5 m/s ?
+            self.default_speed_moving = 0.5 * self.nav_execution_speed                                  # = 0.5 m/s ?
             self.publish_duration = self.distance / self.default_speed_moving if self.distance else 0.0
 
             concerned_axe = 5 if cmd['direction'] == 'forward' else 2                                   # GP_axis_R2 = 5 (forward) and GP_axis_L2 = 2 (backward)
@@ -250,13 +292,13 @@ class VoCom_PubSub(Node):
                 cmd['angle'] = 360
                 
             self.angle = np.radians(cmd.get("angle", 0)) if cmd.get("angle", 0) else 0
-            self.default_speed_angle = 0.5 * self.nav_execution_speed                                                              # = 0.8 rad/s?
-            self.publish_duration = self.angle / self.default_speed_angle                                # angle not distance!
+            self.default_speed_angle = 0.5 * self.nav_execution_speed                                   # = 0.8 rad/s?
+            self.publish_duration = self.angle / self.default_speed_angle                               # angle not distance!
 
-            # rajouter le bouttons crab?  rajouter dans la doc
+            self.joy_msg.buttons[7] = 1                                                                 # Rotation on itself (crab)
             concerned_axe = 0
             self.joy_msg.axes[concerned_axe] = self.default_speed_angle if cmd['direction'] == 'right' else -self.default_speed_angle # par défaut tourner a gauche si direction is 180 or 360_turn
-            self.get_logger().info(f"Publishing for {self.publish_duration:.2f} seconds at frequency {self.pub_freq_4_joy:.2f} and safety speed {self.safety_speed_angle} rad/s.")
+            self.get_logger().info(f"Publishing for {self.publish_duration:.2f} seconds at frequency {self.pub_freq_4_joy:.2f} and safety speed {self.default_speed_angle} rad/s.")
 
         elif cmd['command'] in ['not_a_command', 'not a command']:
             return                                                                                      # Skip publishing for invalid commands
@@ -282,6 +324,14 @@ class VoCom_PubSub(Node):
         self.joy_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_nav.publish(self.joy_msg)
         self.get_logger().info("Completed publishing duration. \n\n")
+
+    def handle_service_response(self, future):
+        """Handles the response from the service."""
+        try:
+            response = future.result()
+            self.get_logger().info(f"Response: success={response.success}, message='{response.message}'")
+        except Exception as e:
+            self.get_logger().error(f"Service call failed: {str(e)}")
 
 def main(args=None):
 
