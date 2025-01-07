@@ -7,3 +7,5 @@ vosk==0.3.45
 llama-cpp-python                # In Conda env: "conda install -c conda-forge ffmpeg"
 ollama==0.3.3
 openai-whisper==20240930
+pvporcupine
+python-dotenv

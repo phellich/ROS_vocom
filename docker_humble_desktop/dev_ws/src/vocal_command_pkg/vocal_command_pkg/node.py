@@ -10,6 +10,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 import time
 from llama_cpp import Llama
 import threading
+from dotenv import load_dotenv, dotenv_values
 
 from vocal_command_pkg.utils_comb import * 
 
@@ -24,17 +25,16 @@ class VoCom_PubSub(Node):
         self.model_thread = None
         self.stop_event = threading.Event() 
 
-        self.pub_freq_4_joy = 0.5                                                                          # sec
+        self.pub_freq_4_joy = 0.5                                                                           # sec
         self.commands = []                                                                                
         self.last_modified_time = None                                                                      # Track the last modified time commands.json
         self.results_folder = "/home/xplore/dev_ws/src/vocal_command_pkg/models_and_results/results/"
         self.models_folder = "/home/xplore/dev_ws/src/vocal_command_pkg/models_and_results/models/"
         self.json_file_path = self.results_folder + "commands.json"
-        self.p = None
-        self.wake_word = ["hello", "halo", "hullo", "allo", "jello", "fellow", "yellow", "he low", "hell oh"]
-        self.sleep_word = ["goodbye", "good way", "good buy", "good eye", "could buy", "good guy", "good try", "good by", "guide by", "good pie", "good bi", "good bai", "good bie", "good bae", "good bay", "good pay"]
         self.delay_2_give_commands = 30
+        load_dotenv("/home/xplore/dev_ws/src/.env")                                                         # load porcupine key from .env file
         self.initialize_models()
+
         self.get_logger().info('Human-Rover communication node has started. Please activate model via CS')
 
         # PUBLISHER
@@ -55,17 +55,13 @@ class VoCom_PubSub(Node):
         # while not self.client.wait_for_service(timeout_sec=2.0):
         #     self.get_logger().info('En attente que le service "topic_service" soit disponible...')
 
-        # FOR TEST
+        # FOR TEST with one node (without CS activation)
         self.vocom_model_state = True
         self.model_thread = threading.Thread(target=self.running_vocom_model, daemon=True)
         self.model_thread.start()
 
     def initialize_models(self):
-        """Initialize Whisper models."""
-
-        self.model_whisper_tiny_en = whisper_config("tiny.en")
-        self.get_logger().info("Whisper Tiny.en ready")                                                      # https://github.com/openai/whisper/discussions/1463
-        
+        """Initialize Whisper models."""                                          # https://github.com/openai/whisper/discussions/1463
         self.model_whisper_base_en = whisper_config("base.en")
         self.get_logger().info("Whisper Base.en ready")
 
@@ -120,39 +116,49 @@ class VoCom_PubSub(Node):
         Input: None
         Output: text (str) - The recognized text from the Speech to Text system.
         '''
-
-        self.p, self.stream, metadata = open_microphone_stream()
-
-        self.get_logger().info(f"\n\n\nOpened microphone stream. Speech 2 Text runnning. Waiting Wake-word: {self.wake_word[0]} \n")
-
-        if wait_4_wake_word(self.stream, self.wake_word, metadata, self.model_whisper_tiny_en):
-            if self.stop_event.is_set():
-                return None
-
-            self.get_logger().info(f"Start listening for commands for {self.delay_2_give_commands}s max. Terminate with: {self.sleep_word[0]}")
+            
+        # self.p, self.stream, metadata = open_microphone_stream()
+        # if wait_4_wake_word(self.stream, self.wake_word, metadata, self.model_whisper_tiny_en):
+        wakeword_model_path = self.models_folder+"Hey-Explore_en_linux_v3_0_0.ppn" 
+        sleepword_model_path = self.models_folder+"Bye-Explore_en_linux_v3_0_0.ppn" 
+        if wait_4_wake_word_TEST(os.getenv("PORCUPINE_KEY"), wakeword_model_path):
         
-            audio = wait_4_sleep_word(self.stream, 
-                                                self.sleep_word,
-                                                metadata, 
-                                                self.model_whisper_tiny_en,
-                                                timeout=self.delay_2_give_commands)
-            
+            if self.stop_event.is_set():
+                return None
+
+            self.get_logger().info(f"Start listening for commands for {self.delay_2_give_commands}s max. Terminate with: 'Bye Explore'")
+                    
+            audio, sampwidth, framerate = wait_4_sleep_word_TEST(os.getenv("PORCUPINE_KEY"), sleepword_model_path, timeout=self.delay_2_give_commands)
+
             if self.stop_event.is_set():
                 return None
             
+            # close_microphone_stream(self.p, self.stream) 
+            save_audio(audio, self.results_folder+"audio.wav", sampwidth, framerate)
+            # save_audio(audio, self.results_folder+"audio.wav", get_sample_size(pyaudio.paInt16), 16000)
+    #             metadata = {
+    #     "chunk": 1024, # 16384,                                                             # 4096, # buffer size pour flux audio (+ grand = + de latence, + petit = + de CPU)
+    #     "sample_format": pyaudio.paInt16,
+    #     "nchannel": 1,                                                              # 1 pour mono, 2 pour stéréo (inutile car pas besoin de spacialisation)
+    #     "framerate": 16000                                                          # fréquence d'échantillonnage (Hz) (16k pour speech recognition en général, 44.1k pour musique)
+    # }
+            # save_audio(audio, self.results_folder+"audio.wav", self.p.get_sample_size(metadata["sample_format"]), metadata["framerate"])
             self.get_logger().info(f"Succesfully recorded command.") 
 
-            save_audio(audio, self.results_folder+"audio.wav", self.p, metadata)
+            # text, _ = recognize_speech_WHISPER(self.model_whisper_tiny_en, audio)
+            # with open(self.results_folder + "text_whisper_tiny.txt", "w") as output_file:
+            #     output_file.write(text)
 
-            text, _ = recognize_speech_WHISPER(self.model_whisper_tiny_en, audio)
-            with open(self.results_folder + "text_whisper_tiny.txt", "w") as output_file:
-                output_file.write(text)
+            whisper_prompt = whisper_prompt = (
+                "Listen to the audio and transcribe any commands given to a rover. "
+                "Commands may involve actions like moving, turning, drilling, or activating cameras, "
+                "and can include details such as distance, angle, or speed. "
+                "Ignore any unrelated conversation or noise. Focus only on commands addressed to the rover."
+            )
 
-            text, _ = recognize_speech_WHISPER(self.model_whisper_base_en, audio)
+            text, _ = recognize_speech_WHISPER(self.model_whisper_base_en, audio, whisper_prompt=whisper_prompt)
             with open(self.results_folder + "text_whisper.txt", "w") as output_file:
                 output_file.write(text)
-
-            close_microphone_stream(self.p, self.stream) 
 
             self.get_logger().info(f"Whisper Base.en: \n{text} \n")
             return text

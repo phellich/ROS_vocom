@@ -9,59 +9,12 @@ from pydantic import BaseModel, Field
 from typing import Literal, Optional, List
 from collections import deque
 import time
+import pvporcupine
+import struct
 
 ################################################
 ## SPEECH 2 TEXT                              ##
 ################################################
-
-# PyAudio stream
-def open_microphone_stream(device_name="pulse"):
-    """Open an audio stream from the microphone using PyAudio."""
-
-    # Advanced Linux Sound Architecture (ALSA) : API for sound card device drivers.
-    # arecord -l in terminal to list audio devices
-    
-    p = pyaudio.PyAudio()                                                           # https://people.csail.mit.edu/hubert/pyaudio/docs/#pyaudio.PyAudio.Stream.__init__
-
-    metadata = {
-        "chunk": 16384,                                                             # 4096, # buffer size pour flux audio (+ grand = + de latence, + petit = + de CPU)
-        "sample_format": pyaudio.paInt16,
-        "nchannel": 1,                                                              # 1 pour mono, 2 pour stéréo (inutile car pas besoin de spacialisation)
-        "framerate": 16000                                                          # fréquence d'échantillonnage (Hz) (16k pour speech recognition en général, 44.1k pour musique)
-    }
-
-    # Trouver l'index du périphérique correspondant à PulseAudio ou un autre nom
-    # device_index = None
-    # for i in range(p.get_device_count()):
-    #     device_info = p.get_device_info_by_index(i)
-    #     if device_name.lower() in device_info.get('name', '').lower():
-    #         device_index = i
-    #         break
-
-    # if device_index is None:
-    #     print(f"Erreur: Impossible de trouver le périphérique '{device_name}'.")
-    #     p.terminate()
-    #     return None, None, None
-
-    try:
-        stream = p.open(format=metadata["sample_format"],
-                    channels=metadata["nchannel"],
-                    rate=metadata["framerate"],
-                    input=True,
-                    frames_per_buffer=metadata["chunk"])                            # input_device_index=device_index,  # Utiliser l'index trouvé
-    except Exception as e:
-        print(f"Error lors de l'ouverture du flux audio: {e}")
-        p.terminate()
-        return None, None, None
-
-    # print(f"Flux audio ouvert avec le périphérique: {device_name} (index: {device_index})")
-    return p, stream, metadata
-
-def close_microphone_stream(p, stream):
-    """Close the audio stream and PyAudio instance."""
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
 
 # Whisper configuration and speech recognition functions
 def whisper_config(model_name):
@@ -133,30 +86,104 @@ def recognize_speech_WHISPER(model, audio, audio_path=None, word_2_rec=None, whi
             print(f"{whisper_model}: {text.lower()}")
     return text, word_2_rec_bool
 
+def wait_4_wake_word_TEST(porcupine_key, model_path):
+    """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
+    # https://picovoice.ai/docs/quick-start/porcupine-python/
+    # https://medium.com/@rohitkuyadav2003/building-a-hotword-detection-with-porcupine-and-python-f95de3b8278d 
+    
+    porcupine=None
+    p=None
+    audio_stream=None
+    try:
+        porcupine = pvporcupine.create(
+            access_key=porcupine_key,
+            keyword_paths=[model_path]
+        )
+        p=pyaudio.PyAudio()
+        audio_stream=p.open(rate=porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
+        while True:
+            keyword=audio_stream.read(porcupine.frame_length)
+            keyword=struct.unpack_from("h"*porcupine.frame_length,keyword)
+            keyword_index=porcupine.process(keyword)
+            if keyword_index>=0:
+                print("hotword detected")
+                break
+
+    finally:
+        if porcupine is not None:
+            porcupine.delete()
+        if audio_stream is not None:
+            audio_stream.close()
+        if p is not None:
+            p.terminate()
+        print("keyword_index: ", keyword_index)
+        return True
+
+def wait_4_sleep_word_TEST(porcupine_key, model_path, timeout=30):
+    """
+    Processes audio and checks for the sleep word. 
+    Concatenate audio chunks and return full audio and text recognized by Vosk when sleep word is detected or timeout time is reached."""
+        
+    porcupine=None
+    p=None
+    audio_stream=None
+    try:
+        porcupine = pvporcupine.create(
+            access_key=porcupine_key,
+            keyword_paths=[model_path]
+        )
+        p=pyaudio.PyAudio()
+        audio_stream=p.open(rate=porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
+        sampwidth = p.get_sample_size(pyaudio.paInt16)
+        framerate = porcupine.sample_rate
+        print(f"Sample width: {sampwidth}, Frame rate: {framerate}")
+        audio_chunks = []
+        while True:
+            keyword=audio_stream.read(porcupine.frame_length)
+            audio_chunks.append(keyword)
+            keyword=struct.unpack_from("h"*porcupine.frame_length,keyword)
+            keyword_index=porcupine.process(keyword)
+            if keyword_index>=0:
+                print("hotword detected")
+                break
+            if len(b''.join(list(audio_chunks))) / porcupine.sample_rate > timeout*2:         # If audio chunks accumulated are more than timeout seconds, return the results
+                print(f"Max audio duration of {timeout}s reached. Processing audio...")
+                break
+
+    finally:
+        if porcupine is not None:
+            porcupine.delete()
+        if audio_stream is not None:
+            audio_stream.close()
+        if p is not None:
+            p.terminate()
+        print("keyword_index: ", keyword_index)
+        return b"".join(audio_chunks), sampwidth, framerate
+        
 def wait_4_wake_word(stream, word_2_rec, metadata, model):
     """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
 
-    q= deque()
+    # q= deque()
     while True:
 
-        if len(q) > 5:
-            q.popleft() 
+        # if len(q) > 5:
+        #     q.popleft() 
   
         audio = stream.read(metadata["chunk"], exception_on_overflow=True) 
 
-        q.append(audio)       
+        # q.append(audio)       
 
-        # start = time.time()
+        # # start = time.time()
         _, wake_word_detected = recognize_speech_WHISPER(model, 
                                                         #  audio, 
                                                          b"".join(q), # audio,
                                                          word_2_rec=word_2_rec, 
                                                          whisper_model="Whisper Tiny.en",
-                                                         whisper_prompt=f"Start listening for wake word {word_2_rec[0]}.")
-        # print(f"Time for 5 chunk: {time.time()-start:.2f}s")
+                                                         whisper_prompt=f"Listen for wake word {word_2_rec[0]}.")
+        # # print(f"Time for 5 chunk: {time.time()-start:.2f}s")
 
         if wake_word_detected:
-            q.clear()
+            # q.clear()
             return True
 
 def wait_4_sleep_word(stream, word_2_rec, metadata, model, timeout=30):
@@ -185,12 +212,12 @@ def wait_4_sleep_word(stream, word_2_rec, metadata, model, timeout=30):
             return b"".join(audio_chunks)
 
 # Fonctions d'audio
-def save_audio(audio, filepath, p, metadata):
+def save_audio(audio, filepath, sampwidth, framerate):
     """Save audio to a WAV file."""
     wf = wave.open(filepath, 'wb')
     wf.setnchannels(1)
-    wf.setsampwidth(p.get_sample_size(metadata["sample_format"]))
-    wf.setframerate(metadata["framerate"])
+    wf.setsampwidth(sampwidth)
+    wf.setframerate(framerate)
     wf.writeframes(audio)
     wf.close()
 
