@@ -10,7 +10,8 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 import time
 from llama_cpp import Llama
 import threading
-from dotenv import load_dotenv, dotenv_values
+from dotenv import load_dotenv
+from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 
 from vocal_command_pkg.utils_comb import * 
 
@@ -33,6 +34,7 @@ class VoCom_PubSub(Node):
         self.json_file_path = self.results_folder + "commands.json"
         self.delay_2_give_commands = 30
         load_dotenv("/home/xplore/dev_ws/src/.env")                                                         # load porcupine key from .env file
+        # os.environ["ALSA_LOG_LEVEL"] = "none"                                                               # Disable ALSA logging
         self.initialize_models()
 
         self.get_logger().info('Human-Rover communication node has started. Please activate model via CS')
@@ -100,15 +102,13 @@ class VoCom_PubSub(Node):
             S2T_output = self.run_S2T()
             if self.stop_event.is_set():                                                                    # Vérifie si l'arrêt a été demandé pendant S2T
                 break
-            # S2T_output = "Drill" # TESTING
+            # S2T_output = "Drill, Bye explore" # TESTING
             llm_output = self.run_T2C(S2T_output)
             if self.stop_event.is_set():  
                 break
             self.check_4_json()                                                                             # (from command to Joy publication)
 
         self.get_logger().info("Vocal Command system has stopped.")
-        if self.p:
-            close_microphone_stream(self.p, self.stream)
 
     def run_S2T(self):
         '''
@@ -116,38 +116,34 @@ class VoCom_PubSub(Node):
         Input: None
         Output: text (str) - The recognized text from the Speech to Text system.
         '''
-            
-        # self.p, self.stream, metadata = open_microphone_stream()
-        # if wait_4_wake_word(self.stream, self.wake_word, metadata, self.model_whisper_tiny_en):
+        
+        # Delete Alsa Lib log: https://stackoverflow.com/questions/7088672/pyaudio-working-but-spits-out-error-messages-each-time?rq=4
+        ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)                    # Définir le type de fonction pour le gestionnaire d'erreurs ALSA
+        def no_error_handler(filename, line, function, err, fmt):                                           # Définir un gestionnaire d'erreurs vide
+            pass
+        asound = cdll.LoadLibrary('libasound.so')                                                           # Charger la bibliothèque ALSA
+        c_error_handler = ERROR_HANDLER_FUNC(no_error_handler)                                              # Créer une instance du gestionnaire d'erreurs
+        asound.snd_lib_error_set_handler(c_error_handler)                                                   # Appliquer le gestionnaire d'erreurs vide
+
         wakeword_model_path = self.models_folder+"Hey-Explore_en_linux_v3_0_0.ppn" 
         sleepword_model_path = self.models_folder+"Bye-Explore_en_linux_v3_0_0.ppn" 
-        if wait_4_wake_word_TEST(os.getenv("PORCUPINE_KEY"), wakeword_model_path):
+        if wait_4_wake_word_porcupine(os.getenv("PORCUPINE_KEY"), wakeword_model_path):
         
             if self.stop_event.is_set():
                 return None
 
             self.get_logger().info(f"Start listening for commands for {self.delay_2_give_commands}s max. Terminate with: 'Bye Explore'")
                     
-            audio, sampwidth, framerate = wait_4_sleep_word_TEST(os.getenv("PORCUPINE_KEY"), sleepword_model_path, timeout=self.delay_2_give_commands)
+            audio, sampwidth, framerate = wait_4_sleep_word_porcupine(os.getenv("PORCUPINE_KEY"), sleepword_model_path, timeout=self.delay_2_give_commands)
+
+            # Réinitialiser le gestionnaire d'erreurs à sa valeur par défaut
+            asound.snd_lib_error_set_handler(None)
 
             if self.stop_event.is_set():
                 return None
             
-            # close_microphone_stream(self.p, self.stream) 
             save_audio(audio, self.results_folder+"audio.wav", sampwidth, framerate)
-            # save_audio(audio, self.results_folder+"audio.wav", get_sample_size(pyaudio.paInt16), 16000)
-    #             metadata = {
-    #     "chunk": 1024, # 16384,                                                             # 4096, # buffer size pour flux audio (+ grand = + de latence, + petit = + de CPU)
-    #     "sample_format": pyaudio.paInt16,
-    #     "nchannel": 1,                                                              # 1 pour mono, 2 pour stéréo (inutile car pas besoin de spacialisation)
-    #     "framerate": 16000                                                          # fréquence d'échantillonnage (Hz) (16k pour speech recognition en général, 44.1k pour musique)
-    # }
-            # save_audio(audio, self.results_folder+"audio.wav", self.p.get_sample_size(metadata["sample_format"]), metadata["framerate"])
             self.get_logger().info(f"Succesfully recorded command.") 
-
-            # text, _ = recognize_speech_WHISPER(self.model_whisper_tiny_en, audio)
-            # with open(self.results_folder + "text_whisper_tiny.txt", "w") as output_file:
-            #     output_file.write(text)
 
             whisper_prompt = whisper_prompt = (
                 "Listen to the audio and transcribe any commands given to a rover. "
@@ -156,7 +152,7 @@ class VoCom_PubSub(Node):
                 "Ignore any unrelated conversation or noise. Focus only on commands addressed to the rover."
             )
 
-            text, _ = recognize_speech_WHISPER(self.model_whisper_base_en, audio, whisper_prompt=whisper_prompt)
+            text = recognize_speech_WHISPER(self.model_whisper_base_en, audio, whisper_prompt=whisper_prompt)
             with open(self.results_folder + "text_whisper.txt", "w") as output_file:
                 output_file.write(text)
 

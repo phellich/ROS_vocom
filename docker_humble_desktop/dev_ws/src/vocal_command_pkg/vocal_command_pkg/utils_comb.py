@@ -7,10 +7,9 @@ import warnings
 import json
 from pydantic import BaseModel, Field
 from typing import Literal, Optional, List
-from collections import deque
-import time
 import pvporcupine
 import struct
+import time
 
 ################################################
 ## SPEECH 2 TEXT                              ##
@@ -25,7 +24,7 @@ def whisper_config(model_name):
     return whisper_model
 
 # Fonctions Speech recognition
-def recognize_speech_WHISPER(model, audio, audio_path=None, word_2_rec=None, whisper_model="Whisper Base.en", whisper_prompt=None):                        # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text
+def recognize_speech_WHISPER(model, audio, audio_path=None, whisper_prompt=None):                        # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text
     """Processes audio data and checks for the wake word."""
     if audio_path:
         # Charger et préparer l'audio depuis un fichier si un chemin est fourni
@@ -35,121 +34,138 @@ def recognize_speech_WHISPER(model, audio, audio_path=None, word_2_rec=None, whi
         audio = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
 
     # https://github.com/openai/whisper/blob/main/whisper/transcribe.py
+    text = model.transcribe(audio,
+                            initial_prompt=whisper_prompt
+                            )['text']
 
-    # start = time.time()
-    text = model.transcribe(audio)['text']
-    # print(f"Param 0: {time.time()-start:.2f}s")
+    return text
 
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         language="en",
-    #                         task="transcribe"
-    #                         )['text']
-    # print(f"Param 1: {time.time()-start:.2f}s")
+def wait_4_wake_word_porcupine(porcupine_key, model_path):
 
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         fp16=False
-    #                         )['text']
-    # print(f"Param 2: {time.time()-start:.2f}s")
+    """
+    Processes audio and detects the Porcupine wake word.
+    
+    Args:
+        porcupine_key (str): Porcupine access key.
+        model_path (str): Path to the wake word model file (.ppn).
 
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         temperature=0
-    #                         )['text']
-    # print(f"Param 3: {time.time()-start:.2f}s")
-
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         beam_size=1, 
-    #                         best_of=1
-    #                         )['text']
-    # print(f"Param 4: {time.time()-start:.2f}s")
-
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         logprob_threshold=-3.0, # default=-1.0
-    #                         no_speech_threshold=0.3 # default=0.6
-    #                         )['text']
-    # print(f"Param 5: {time.time()-start:.2f}s")
-
-    # start = time.time()
-    # text = model.transcribe(audio,
-    #                         initial_prompt=whisper_prompt
-    #                         )['text']
-    # print(f"Param 6: {time.time()-start:.2f}s")
-
-    word_2_rec_bool = False
-    if word_2_rec:
-        word_2_rec_bool = any(w in text.lower() for w in word_2_rec)
-        if text:
-            print(f"{whisper_model}: {text.lower()}")
-    return text, word_2_rec_bool
-
-def wait_4_wake_word_TEST(porcupine_key, model_path):
-    """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
+    Returns:
+        bool: True if the wake word is detected.
+    """
+    
     # https://picovoice.ai/docs/quick-start/porcupine-python/
     # https://medium.com/@rohitkuyadav2003/building-a-hotword-detection-with-porcupine-and-python-f95de3b8278d 
     
-    porcupine=None
-    p=None
-    audio_stream=None
+    porcupine = None
+    audio_stream = None
+    p = None
+    keyword_index = -1  # Initialize to avoid unbound variable issues
     try:
+        # Create the Porcupine wake word detector
         porcupine = pvporcupine.create(
             access_key=porcupine_key,
             keyword_paths=[model_path]
         )
-        p=pyaudio.PyAudio()
-        audio_stream=p.open(rate=porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
+        
+        # Initialize PyAudio
+        p = pyaudio.PyAudio()
+        audio_stream = p.open(
+            rate=porcupine.sample_rate,
+            channels=1,
+            format=pyaudio.paInt16,
+            input=True,
+            frames_per_buffer=porcupine.frame_length
+        )
+        
+        print("Listening for the wake word...")
+        
         while True:
-            keyword=audio_stream.read(porcupine.frame_length)
-            keyword=struct.unpack_from("h"*porcupine.frame_length,keyword)
-            keyword_index=porcupine.process(keyword)
-            if keyword_index>=0:
-                print("hotword detected")
+            # Read audio stream
+            pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
+            pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
+            
+            # Process audio for wake word detection
+            keyword_index = porcupine.process(pcm)
+            if keyword_index >= 0:
+                print("Wake word detected!")
                 break
 
+    except Exception as e:
+        print(f"Error occurred: {e}")
     finally:
+        # Clean up resources
         if porcupine is not None:
             porcupine.delete()
         if audio_stream is not None:
             audio_stream.close()
         if p is not None:
             p.terminate()
-        print("keyword_index: ", keyword_index)
-        return True
-
-def wait_4_sleep_word_TEST(porcupine_key, model_path, timeout=30):
-    """
-    Processes audio and checks for the sleep word. 
-    Concatenate audio chunks and return full audio and text recognized by Vosk when sleep word is detected or timeout time is reached."""
         
-    porcupine=None
-    p=None
-    audio_stream=None
+        print(f"Final keyword_index: {keyword_index}")
+        return keyword_index >= 0
+
+def wait_4_sleep_word_porcupine(porcupine_key, model_path, timeout=30):
+    """
+    Processes audio to detect the sleep word. Captures audio chunks and returns the full audio 
+    if the sleep word is detected or if the timeout is reached.
+    
+    Args:
+        porcupine_key (str): Porcupine access key.
+        model_path (str): Path to the sleep word model file (.ppn).
+        timeout (int): Maximum duration (in seconds) to listen before returning audio.
+
+    Returns:
+        tuple: (audio_data (bytes), sample_width (int), frame_rate (int)).
+    """
+    porcupine = None
+    audio_stream = None
+    p = None
+    keyword_index = -1  # Initialize to avoid unbound variable issues
+    sampwidth = 2       # Default for pyaudio.paInt16 (16-bit audio)
+    framerate = None
+    audio_chunks = []
+
     try:
         porcupine = pvporcupine.create(
             access_key=porcupine_key,
             keyword_paths=[model_path]
         )
-        p=pyaudio.PyAudio()
-        audio_stream=p.open(rate=porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
+        
+        # Initialize PyAudio
+        p = pyaudio.PyAudio()
+        audio_stream = p.open(
+            rate=porcupine.sample_rate,
+            channels=1,
+            format=pyaudio.paInt16,
+            input=True,
+            frames_per_buffer=porcupine.frame_length
+        )
+        
         sampwidth = p.get_sample_size(pyaudio.paInt16)
         framerate = porcupine.sample_rate
-        print(f"Sample width: {sampwidth}, Frame rate: {framerate}")
-        audio_chunks = []
+        
+        # Monitor audio for sleep word or timeout
+        start_time = time.time()
         while True:
-            keyword=audio_stream.read(porcupine.frame_length)
-            audio_chunks.append(keyword)
-            keyword=struct.unpack_from("h"*porcupine.frame_length,keyword)
-            keyword_index=porcupine.process(keyword)
-            if keyword_index>=0:
-                print("hotword detected")
+            # Read and store audio chunks
+            pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
+            audio_chunks.append(pcm)
+            
+            # Process audio chunk for sleep word detection
+            pcm_unpacked = struct.unpack_from("h" * porcupine.frame_length, pcm)
+            keyword_index = porcupine.process(pcm_unpacked)
+            if keyword_index >= 0:
+                print("Sleep word detected!")
                 break
-            if len(b''.join(list(audio_chunks))) / porcupine.sample_rate > timeout*2:         # If audio chunks accumulated are more than timeout seconds, return the results
-                print(f"Max audio duration of {timeout}s reached. Processing audio...")
+            
+            # Check if timeout is reached
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout:
+                print(f"Timeout of {timeout}s reached. Processing audio...")
                 break
 
+    except Exception as e:
+        print(f"Error occurred: {e}")
     finally:
         if porcupine is not None:
             porcupine.delete()
@@ -157,59 +173,11 @@ def wait_4_sleep_word_TEST(porcupine_key, model_path, timeout=30):
             audio_stream.close()
         if p is not None:
             p.terminate()
-        print("keyword_index: ", keyword_index)
-        return b"".join(audio_chunks), sampwidth, framerate
         
-def wait_4_wake_word(stream, word_2_rec, metadata, model):
-    """Processes audio and checks for the wake word. Print Vosk recognized text in real time."""
+        audio_data = b"".join(audio_chunks)
+        print(f"Final keyword_index: {keyword_index}, Captured audio length: {len(audio_data) / framerate if framerate else 0}s")
+        return audio_data, sampwidth, framerate
 
-    # q= deque()
-    while True:
-
-        # if len(q) > 5:
-        #     q.popleft() 
-  
-        audio = stream.read(metadata["chunk"], exception_on_overflow=True) 
-
-        # q.append(audio)       
-
-        # # start = time.time()
-        _, wake_word_detected = recognize_speech_WHISPER(model, 
-                                                        #  audio, 
-                                                         b"".join(q), # audio,
-                                                         word_2_rec=word_2_rec, 
-                                                         whisper_model="Whisper Tiny.en",
-                                                         whisper_prompt=f"Listen for wake word {word_2_rec[0]}.")
-        # # print(f"Time for 5 chunk: {time.time()-start:.2f}s")
-
-        if wake_word_detected:
-            # q.clear()
-            return True
-
-def wait_4_sleep_word(stream, word_2_rec, metadata, model, timeout=30):
-    """
-    Processes audio and checks for the sleep word. 
-    Concatenate audio chunks and return full audio and text recognized by Vosk when sleep word is detected or timeout time is reached."""
-
-    audio_chunks = []
-    while True:
-        audio = stream.read(metadata["chunk"], exception_on_overflow=True)
-        audio_chunks.append(audio)
-
-        start = time.time()
-        _, wake_word_detected = recognize_speech_WHISPER(model, 
-                                                         b"".join(audio_chunks[-5:]), 
-                                                         word_2_rec=word_2_rec,
-                                                         whisper_model="Whisper Tiny.en",
-                                                         whisper_prompt=f"Start listening for end of command word {word_2_rec[0]}.")
-        print(f"Time for 5 chunk: {time.time()-start:.2f}s")
-
-        if len(b''.join(list(audio_chunks))) / metadata["framerate"] > timeout*2:         # If audio chunks accumulated are more than timeout seconds, return the results
-            print(f"Max audio duration of {timeout}s reached. Processing audio...")
-            return b"".join(audio_chunks)
-
-        if wake_word_detected:
-            return b"".join(audio_chunks)
 
 # Fonctions d'audio
 def save_audio(audio, filepath, sampwidth, framerate):
