@@ -52,7 +52,7 @@ class FakeCSnode(Node):
     def handle_user_input(self):
         """Handles user input in a seperate Ros2 callback thread"""
         while rclpy.ok():
-            command = input("Enter command (y/n/q): ").strip()
+            command = input("Enter command (y/n/q): \n").strip().lower()
             if command == 'q':
                 self.get_logger().info("Exiting FakeCSnode.")
                 rclpy.shutdown()

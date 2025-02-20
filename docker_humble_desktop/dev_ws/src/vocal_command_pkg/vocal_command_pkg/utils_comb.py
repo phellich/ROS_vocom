@@ -5,7 +5,7 @@ import json
 import whisper
 import warnings
 import json
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field # https://medium.com/@marcnealer/a-practical-guide-to-using-pydantic-8aafa7feebf6
 from typing import Literal, Optional, List
 import pvporcupine
 import struct
@@ -15,7 +15,7 @@ import time
 ## SPEECH 2 TEXT                              ##
 ################################################
 
-# Whisper configuration and speech recognition functions
+# Whisper configuration 
 def whisper_config(model_name):
     """Initialise Whisper model."""
     warnings.filterwarnings("ignore", category=FutureWarning, module="whisper")
@@ -23,7 +23,7 @@ def whisper_config(model_name):
     whisper_model = whisper.load_model(model_name)
     return whisper_model
 
-# Fonctions Speech recognition
+# Speech recognition
 def recognize_speech_WHISPER(model, audio, audio_path=None, whisper_prompt=None):                        # Use prompt to recognize some specific words or enhance the recognition? https://platform.openai.com/docs/guides/speech-to-text
     """Processes audio data and checks for the wake word."""
     if audio_path:
@@ -41,7 +41,6 @@ def recognize_speech_WHISPER(model, audio, audio_path=None, whisper_prompt=None)
     return text
 
 def wait_4_wake_word_porcupine(porcupine_key, model_path):
-
     """
     Processes audio and detects the Porcupine wake word.
     
@@ -77,8 +76,6 @@ def wait_4_wake_word_porcupine(porcupine_key, model_path):
             frames_per_buffer=porcupine.frame_length
         )
         
-        print("Listening for the wake word...")
-        
         while True:
             # Read audio stream
             pcm = audio_stream.read(porcupine.frame_length, exception_on_overflow=False)
@@ -87,11 +84,10 @@ def wait_4_wake_word_porcupine(porcupine_key, model_path):
             # Process audio for wake word detection
             keyword_index = porcupine.process(pcm)
             if keyword_index >= 0:
-                print("Wake word detected!")
                 break
 
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"ERROR OCCURED: {e}")
     finally:
         # Clean up resources
         if porcupine is not None:
@@ -100,8 +96,7 @@ def wait_4_wake_word_porcupine(porcupine_key, model_path):
             audio_stream.close()
         if p is not None:
             p.terminate()
-        
-        print(f"Final keyword_index: {keyword_index}")
+
         return keyword_index >= 0
 
 def wait_4_sleep_word_porcupine(porcupine_key, model_path, timeout=30):
@@ -155,13 +150,11 @@ def wait_4_sleep_word_porcupine(porcupine_key, model_path, timeout=30):
             pcm_unpacked = struct.unpack_from("h" * porcupine.frame_length, pcm)
             keyword_index = porcupine.process(pcm_unpacked)
             if keyword_index >= 0:
-                print("Sleep word detected!")
                 break
             
             # Check if timeout is reached
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout:
-                print(f"Timeout of {timeout}s reached. Processing audio...")
                 break
 
     except Exception as e:
@@ -175,11 +168,9 @@ def wait_4_sleep_word_porcupine(porcupine_key, model_path, timeout=30):
             p.terminate()
         
         audio_data = b"".join(audio_chunks)
-        print(f"Final keyword_index: {keyword_index}, Captured audio length: {len(audio_data) / framerate if framerate else 0}s")
         return audio_data, sampwidth, framerate
 
-
-# Fonctions d'audio
+# Audio handling
 def save_audio(audio, filepath, sampwidth, framerate):
     """Save audio to a WAV file."""
     wf = wave.open(filepath, 'wb')
@@ -209,13 +200,6 @@ def stereo_to_mono(frames, metadata):
     else:                                                                           # Already mono, no conversion needed
         return frames
 
-def read_text_file(file_path):
-    '''Read the text content from a file.
-    Returns a series of text lines.'''
-    with open(file_path, "r") as file:
-        text = file.read()
-    return text
-
 ################################################
 ## TEXT 2 COMMAND                             ##
 ################################################
@@ -237,6 +221,7 @@ def prepare_llama_cpp_generation():
         commands: List[RoverCommand] = Field(description="List of commands to be executed by the rover")
 
     json_schema = MissionPlan.model_json_schema()
+    # print(json_schema)
 
     system_prompt = """You are assisting a rover's navigation and control system to interpret user instructions accurately. Your task is to identify specific commands (such as "move," "turn", "drill" or "cameras") and their details (such as distance, angle or execution speed) from the provided instructions.
 
@@ -326,7 +311,6 @@ def llama_cpp_generation(llm, system_prompt, query, json_schema, temperature = 0
     )
     return completion['choices'][0]["message"]["content"]
 
-# Functions about pseudo JSON output
 def save_json(llm_output, file_path, file_name):
     """Save the LLM output as a JSON file or plain text if not valid JSON."""
 
@@ -344,10 +328,135 @@ def save_json(llm_output, file_path, file_name):
         text_file_name = file_path + file_name + '.json'
         with open(text_file_name, 'w') as json_file:
             json.dump(json_data, json_file, indent=4)
-        print(f"Output saved as JSON to '{text_file_name}'.")
 
     except json.JSONDecodeError:                                                # If llm_output is not a valid JSON, save as plain text
         text_file_name = file_path + file_name + '.txt'
         with open(text_file_name, 'w') as text_file:
             text_file.write(llm_output)
-        print(f"Output is not valid JSON. Saved as text to '{text_file_name}'.")
+
+    return text_file_name
+
+# {
+#   "type": "object",
+#   "title": "MissionPlan",
+#   "properties": {
+#     "commands": {
+#       "type": "array",
+#       "title": "Commands",
+#       "description": "List of commands to be executed by the rover",
+#       "items": {
+#         "$ref": "#/$defs/RoverCommand"
+#       }
+#     }
+#   },
+#   "required": ["commands"],
+#   "$defs": {
+#     "RoverCommand": {
+#       "type": "object",
+#       "title": "RoverCommand",
+#       "properties": {
+#         "command": {
+#           "type": "string",
+#           "title": "Command",
+#           "description": "Type of command to execute.",
+#           "enum": ["move", "turn", "drill", "cameras", "not_a_command"]
+#         },
+#         "direction": {
+#           "anyOf": [
+#             {
+#               "type": "string",
+#               "enum": ["forward", "backward", "right", "left", "180_turn", "360_turn"]
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Direction",
+#           "description": "Direction of movement or rotation, depending on the command",
+#           "default": null
+#         },
+#         "execution_speed": {
+#           "anyOf": [
+#             {
+#               "type": "string",
+#               "enum": ["fast", "slow", "default"]
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Execution Speed",
+#           "description": "Execution speed for the mission",
+#           "default": null
+#         },
+#         "distance": {
+#           "anyOf": [
+#             {
+#               "type": "number"
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Distance",
+#           "description": "Distance in meters, null otherwise",
+#           "default": null
+#         },
+#         "angle": {
+#           "anyOf": [
+#             {
+#               "type": "number"
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Angle",
+#           "description": "Rotation angle in degrees, null otherwise",
+#           "default": null
+#         },
+#         "camera_toggle": {
+#           "anyOf": [
+#             {
+#               "type": "string",
+#               "enum": ["turn_on", "turn_off"]
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Camera Toggle",
+#           "description": "Indicates whether to turn the cameras on or off, null otherwise",
+#           "default": null
+#         },
+#         "drill_rotation_speed": {
+#           "anyOf": [
+#             {
+#               "type": "integer"
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Drill Rotation Speed",
+#           "description": "Optional drill rotation speed, null otherwise",
+#           "default": null
+#         },
+#         "drill_distance_ratio": {
+#           "anyOf": [
+#             {
+#               "type": "number"
+#             },
+#             {
+#               "type": "null"
+#             }
+#           ],
+#           "title": "Drill Distance Ratio",
+#           "description": "Optional drill distance ratio, null otherwise",
+#           "default": null
+#         }
+#       },
+#       "required": ["command"]
+#     }
+#   }
+# }

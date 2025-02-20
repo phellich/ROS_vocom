@@ -161,27 +161,11 @@ cd src
 ros2 pkg create --build-type ament_python vocal_command_pkg
 ```
 
-## TODO Ideas
-
-- Fix Max audio duration print statement
-- See how Ollama interact
-- Refine prompt example with gradient, or calculus, or yards, and add goodbye
-- Add good bye to sleep words
-- Add 180_turn and 360_turn to direction
-- Implementer move right, left, diagnally to the right (turn then move)
-- add slowly or fast or normal as a JSON field for the execution speed
-- Github copilot pour les dev
-- Confirmer elca tool pour bien flag et debut de reponses aux tickets
-- Reflechir aux pdm, rag   tiny rag, graph rag pour usage interne
-- IA automatisation, pour les RH
-- ajouter une key json execution speed (fast, slow, default)
-
 installation: hardware should have the following folder for mic access and results output: volunme in dockecompose
 
-Giovanni: 
-- STOP PENDANT LA COMMANDE EXECUTION ( a tester) fait
-- CHANGER EN SERVICE fait
-- PUBLIER A LA FREQ X PENDANT X S fait 
+## TODO Ideas
+
+Notes: 
 - light non car s'allume en fonction de quel sous systeme ou non
 - mode de deplacement du robot (lateral (en cours) ou normal)
 - mode de nav
@@ -189,18 +173,3 @@ Giovanni:
 drill down up)
 - activer le drill seulement si la nav est pas allumée
 - nerc rc dril -> new fsm (interface CS, drill node dans src)
-- micro de logitec pas encore recu
-- d'abord tester ou je parle a mon ordi et ca output juste les commandes au rover dans un topic de base 
-- puis ou moi j'active la nav et je le dis a la CS 
-- et enfin tout faire local
-
-- Avant la rentrée de fevrier c'est chaud 
-
-- 134G ca passe (nav c'est 15)
-- l'ancienne va pas supporter , en attente des nouvelles qui sont censees etre arrivées de puis 2 semaines
-
-Idées: 
-  Version avec live Whisper, 
-  continuer la SER (train?), 
-  continuer la sentiment analysis (text)
-  refaire une démo plus complète
