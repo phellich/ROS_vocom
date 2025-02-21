@@ -27,10 +27,10 @@ USER $USERNAME
 WORKDIR /home/$USERNAME/dev_ws/src
 COPY dev_ws/src /home/$USERNAME/dev_ws/src
 # COPY dev_ws/src/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r ./requirements.txt && \ 
-    rm ./requirements.txt
-# RUN pip install -r ./requirements.txt && \ 
+# RUN pip install --no-cache-dir -r ./requirements.txt && \ 
 #     rm ./requirements.txt
+RUN pip install -r ./requirements.txt && \ 
+    rm ./requirements.txt
 
 # Set a directory to build the project
 WORKDIR /home/$USERNAME/dev_ws
