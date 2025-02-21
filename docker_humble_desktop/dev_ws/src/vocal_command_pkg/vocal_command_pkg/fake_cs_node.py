@@ -12,7 +12,7 @@ class FakeCSnode(Node):
         super().__init__('fake_cs_node')
 
         # Création d'un client pour envoyer des requêtes au service
-        self.client = self.create_client(SetBool, 'vocom_activation_service')
+        self.client = self.create_client(SetBool, '/CS/vocom_activation_service')
         
         while not self.client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('En attente que le service "vocom_activation_service" soit disponible...')
@@ -20,7 +20,7 @@ class FakeCSnode(Node):
         # Subscriber for listening to responses
         self.subscription = self.create_subscription(
             Joy, 
-            'fake_cs_response',
+            '/CS/NAV_gamepad',
             self.listener_callback,
             10)
 

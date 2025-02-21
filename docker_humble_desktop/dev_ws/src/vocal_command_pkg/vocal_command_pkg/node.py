@@ -50,12 +50,12 @@ class VoCom_PubSub(Node):
         #     depth=1,
         # )
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=10)
-        self.publisher_nav = self.create_publisher(Joy, "fake_cs_response", qos_profile)                       # /CS/NAV_gamepad
+        self.publisher_nav = self.create_publisher(Joy, "/CS/NAV_gamepad", qos_profile)                       # /CS/NAV_gamepad ou fake_cs_response
         # self.publisher_drill = self.create_publisher(ScDrillCmds, "fake_CS_drill_publi", qos_profile)                   # /SC/drill_cmd
 
         
         # SERVICE                                                                                           # https://docs.ros.org/en/noetic/api/std_srvs/html/srv/SetBool.html 
-        self.service_ = self.create_service(SetBool, 'vocom_activation_service', self.handle_activation_request)  
+        self.service_ = self.create_service(SetBool, '/CS/vocom_activation_service', self.handle_activation_request)  # vocom_activation_service
         # self.cam_client = self.create_client(SetBool, 'topic_service')                                   # See details in camera command pub
         # while not self.client.wait_for_service(timeout_sec=2.0):
         #     self.get_logger().info('En attente que le service "topic_service" soit disponible...')
