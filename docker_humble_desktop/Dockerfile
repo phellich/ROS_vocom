@@ -37,7 +37,7 @@ RUN pip download llama-cpp-python && \
     tar -xvf llama_cpp_python-*.tar.gz && \
     cd llama_cpp_python-* && \
     # sed -i 's/-mcpu=native+nodotprod+noi8mm+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
-    sed -i 's/-mcpu=native\+nodotprod\+noi8mm\+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt
+    sed -i 's/-mcpu=native\+nodotprod\+noi8mm\+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
     pip install . && \
     cd .. && rm -rf llama_cpp_python-*
 
