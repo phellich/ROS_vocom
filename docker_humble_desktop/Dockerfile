@@ -10,6 +10,9 @@ FROM ghcr.io/epflxplore/base:humble-desktop
 # Switch to root user to have sufficient privileges for apt-get
 USER root
 
+# LlamaCpp on Jetson Xavier ARM
+ENV CMAKE_ARGS="-DGGML_CMAKE_CPU_FLAGS=-mcpu=cortex-a57"
+
 # Prepare LlamaCpp and PyAudio installation, Intsall PulseAudio
 RUN apt-get update && \
     apt-get install -y \
