@@ -4,7 +4,7 @@ numpy<1.25.0
 torch==1.11.0
 pyaudio==0.2.14 
 vosk==0.3.45
-llama-cpp-python                # In Conda env: "conda install -c conda-forge ffmpeg"
+# llama-cpp-python                # In Conda env: "conda install -c conda-forge ffmpeg"
 ollama==0.3.3
 openai-whisper==20240930
 pvporcupine

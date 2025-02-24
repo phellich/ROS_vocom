@@ -10,9 +10,6 @@ FROM ghcr.io/epflxplore/base:humble-desktop
 # Switch to root user to have sufficient privileges for apt-get
 USER root
 
-# LlamaCpp on Jetson Xavier ARM
-ENV CMAKE_ARGS="-DGGML_CMAKE_CPU_FLAGS=-mcpu=cortex-a57"
-
 # Prepare LlamaCpp and PyAudio installation, Intsall PulseAudio
 RUN apt-get update && \
     apt-get install -y \
@@ -34,6 +31,17 @@ COPY dev_ws/src /home/$USERNAME/dev_ws/src
 #     rm ./requirements.txt
 RUN pip install -r ./requirements.txt && \ 
     rm ./requirements.txt
+
+# Install LlamaCpp
+# Pre-download the package
+RUN pip download llama-cpp-python && \
+    tar -xvf llama-cpp-python-*.tar.gz && \
+    cd llama-cpp-python-* && \
+    # Replace the invalid flag in the CMake file with a supported one (e.g., cortex-a57)
+    sed -i 's/-mcpu=native+nodotprod+noi8mm+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
+    # Install the patched package
+    pip install . && \
+    cd .. && rm -rf llama-cpp-python-*
 
 # Set a directory to build the project
 WORKDIR /home/$USERNAME/dev_ws
