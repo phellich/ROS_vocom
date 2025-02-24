@@ -35,13 +35,13 @@ RUN pip install -r ./requirements.txt && \
 # Install LlamaCpp
 # Pre-download the package
 RUN pip download llama-cpp-python && \
-    tar -xvf llama-cpp-python-*.tar.gz && \
+    tar -xvf llama_cpp_python-*.tar.gz && \
     cd llama-cpp-python-* && \
-    # Replace the invalid flag in the CMake file with a supported one (e.g., cortex-a57)
     sed -i 's/-mcpu=native+nodotprod+noi8mm+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
-    # Install the patched package
     pip install . && \
     cd .. && rm -rf llama-cpp-python-*
+
+RUN pip install . && pip install --force-reinstall numpy==1.24.4
 
 # Set a directory to build the project
 WORKDIR /home/$USERNAME/dev_ws

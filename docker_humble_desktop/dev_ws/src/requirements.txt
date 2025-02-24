@@ -1,6 +1,6 @@
 # pip freeze > requirements.txt
 pydantic==2.9.2
-numpy<1.25.0 
+numpy==1.24.4 
 torch==1.11.0
 pyaudio==0.2.14 
 vosk==0.3.45
