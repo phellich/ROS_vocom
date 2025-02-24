@@ -37,12 +37,8 @@ RUN pip download llama-cpp-python && \
     tar -xvf llama_cpp_python-*.tar.gz && \
     cd llama_cpp_python-* && \
     sed -E -i 's/-mcpu=native\+nodotprod\+noi8mm\+nosve/-mcpu=cortex-a57/g' vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
-    # Vérifier que le remplacement a bien été effectué (optionnel)
-    grep -R "cortex-a57" vendor/llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt && \
     pip install . && \
     cd .. && rm -rf llama_cpp_python-*
-
-
 
 RUN pip install . && pip install --force-reinstall numpy==1.24.4
 
