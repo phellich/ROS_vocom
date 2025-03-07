@@ -15,7 +15,7 @@ services:                                                   # different containe
       - /dev:/dev                                           # host devices to container
       # tout fichier ou répertoire stocké dans le volume base_humble_desktop_home_volume sera accessible à l'intérieur du conteneur à l'emplacement /home/xplore.
       # Contrairement aux fichiers créés directement dans le conteneur, les données dans ce volume persisteront même si le conteneur est arrêté ou supprimé
-      # - ./dev_ws/src:/home/xplore/dev_ws/src                # Synchronisation de src entre hôte et container --> IN IMAGE NOW, # TO COMMENT FOR FINAL DEPLOYMENT
+      - ./dev_ws/src:/home/xplore/dev_ws/src                # Synchronisation de src entre hôte et container --> IN IMAGE NOW, # TO COMMENT FOR FINAL DEPLOYMENT
       - /mnt/wslg:/mnt/wslg:ro                              # Partage de données entre WSL et WSLg (partager le socket de PulseAudio avec le conteneur)
       - ./dev_ws/src/vocal_command_pkg/models_and_results/results:/home/xplore/dev_ws/src/vocal_command_pkg/models_and_results/results    
     devices:                                                # host sound device to container
