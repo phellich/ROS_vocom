@@ -60,10 +60,10 @@ class VoCom_PubSub(Node):
         # while not self.client.wait_for_service(timeout_sec=2.0):
         #     self.get_logger().info('En attente que le service "topic_service" soit disponible...')
 
-        # # # FOR TEST on local without a fake CS activating the system via a ROS service 
-        # self.vocom_model_state = True
-        # self.model_thread = threading.Thread(target=self.running_vocom_model, daemon=True)
-        # self.model_thread.start()
+        # # FOR TEST on local without a fake CS activating the system via a ROS service 
+        self.vocom_model_state = True
+        self.model_thread = threading.Thread(target=self.running_vocom_model, daemon=True)
+        self.model_thread.start()
 
     def initialize_models(self):
         """Initialize Whisper models."""                                          # https://github.com/openai/whisper/discussions/1463

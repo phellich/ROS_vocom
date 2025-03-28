@@ -5,19 +5,19 @@
 # If not working, first do: sudo rm -rf /tmp/.docker.xauth
 # If still not working, try running the script as root.
 
-XAUTH=/tmp/.docker.xauth
+# XAUTH=/tmp/.docker.xauth
 
-echo "Preparing Xauthority data..."
-xauth_list=$(xauth nlist :0 | tail -n 1 | sed -e 's/^..../ffff/')
-if [ ! -f $XAUTH ]; then
-    if [ ! -z "$xauth_list" ]; then
-        echo $xauth_list | xauth -f $XAUTH nmerge -
-    else
-        touch $XAUTH
-    fi
-    chmod a+r $XAUTH
-fi
-echo "Done."
+# echo "Preparing Xauthority data..."
+# xauth_list=$(xauth nlist :0 | tail -n 1 | sed -e 's/^..../ffff/')
+# if [ ! -f $XAUTH ]; then
+#     if [ ! -z "$xauth_list" ]; then
+#         echo $xauth_list | xauth -f $XAUTH nmerge -
+#     else
+#         touch $XAUTH
+#     fi
+#     chmod a+r $XAUTH
+# fi
+# echo "Done."
 # echo ""
 # echo "Verifying file contents:"
 # file $XAUTH

@@ -1,5 +1,2 @@
 dev_ws/src/models_and_results/results/
-# clé porcupine?
-# To keep as part of ros package architecture:
-# dev_ws/src/vocal_command_pkg/resource/
-# dev_ws/src/vocal_command_pkg/test/
+dev_ws/src/models_and_results/models/Llama-3.2-3B-Instruct-Q6_K_L.gguf

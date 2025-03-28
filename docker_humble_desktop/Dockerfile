@@ -25,8 +25,8 @@ RUN apt-get update && \
 # Install requirements (uv in docker: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv)
 USER $USERNAME
 WORKDIR /home/$USERNAME/dev_ws/src
-COPY dev_ws/src /home/$USERNAME/dev_ws/src
-# COPY dev_ws/src/requirements.txt ./requirements.txt
+# COPY dev_ws/src /home/$USERNAME/dev_ws/src
+COPY dev_ws/src/requirements.txt ./requirements.txt
 # RUN pip install --no-cache-dir -r ./requirements.txt && \ 
 #     rm ./requirements.txt
 RUN pip install -r ./requirements.txt && \ 
@@ -34,10 +34,10 @@ RUN pip install -r ./requirements.txt && \
 
 # Install LlamaCpp
 # same as previous solution but desesperate...
-RUN CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+# RUN CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
 
 
-RUN pip install . && pip install --force-reinstall numpy==1.24.4
+# RUN pip install . && pip install --force-reinstall numpy==1.24.4
 
 # Set a directory to build the project
 WORKDIR /home/$USERNAME/dev_ws
