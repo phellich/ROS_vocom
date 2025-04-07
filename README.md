@@ -141,9 +141,9 @@ We use a Llama model wrapper called [Llama.cpp](https://github.com/ggerganov/lla
 Once the commands are loaded into a JSON file, we iterate through and execute them sequentially. Each command is translated into a Joy message and published to the `/CS/NAV_gamepad` topic. 
 
 The system focuses on navigation commands:
-- Backward or forward: default speed is $0.5,m/s$ (i.e., 0.5 as published in Joy)
-- Rotation: default speed is $0.5,rad/s$ (i.e., 0.5 as published in Joy)
-The parameter `execution speed` is a factor that multiplies the default speed. It is 1 by default, 0.5 when set to `slow`, and 1.5 when set to `fast`. 
+- Backward or forward: Joy value is 0.50 (ie 50% of max speed set by navigation speed, set to 1m/s in the code)
+- Rotation: Joy value is 0.50 (ie 50% of max rot speed set by navigation speed, set to 0.7rad/s in the code)
+The parameter `execution speed` is a factor that **multiplies** the default speed. It is 1 by default, 0.5 when set to `slow`, and 1.3 when set to `fast`. 
 
 We fix the speed and the user ask for a distance, so the message is published for a duration $ t = \frac{d}{v} $.
 

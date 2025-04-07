@@ -67,8 +67,8 @@ class VoCom_PubSub(Node):
 
     def initialize_models(self):
         """Initialize Whisper models."""                                          # https://github.com/openai/whisper/discussions/1463
-        self.get_logger().info("Loading Whisper base.en model...")
-        self.model_whisper_base_en = whisper_config("base.en")
+        self.get_logger().info("Loading Whisper small.en model...")
+        self.model_whisper_base_en = whisper_config("small.en")
         self.get_logger().info("Whisper base.en model ready")
 
         # self.get_logger().info("Loading Porcupine hotwords engines...")
@@ -179,7 +179,7 @@ class VoCom_PubSub(Node):
             with open(self.results_folder + "text_whisper.txt", "w") as output_file:
                 output_file.write(text)
 
-            self.get_logger().info(f"Audio transcripted and text saved. Transcription: \n{text}") 
+            self.get_logger().info(f"Audio transcripted and text saved. Transcription:\n{text}") 
             return text
 
     def run_T2C(self, S2T_output): 
@@ -298,19 +298,21 @@ class VoCom_PubSub(Node):
         # self.joy_msg.buttons[1] = 0                                                                   # Round on PS4: switch between manual and auto nav mode
 
         self.nav_execution_speed = self.get_nav_speed(cmd)                                              # Get the navigation speed from the JSON file
-        self.get_logger().info(f"Navigation speed factor of command '{cmd['command']}': {self.nav_execution_speed}.")
+        # self.get_logger().info(f"Navigation speed factor of command '{cmd['command']}': {self.nav_execution_speed}.")
 
         if cmd['command'] == 'move':
             
             if cmd['direction'] not in ['forward', 'backward']:
                 return                                                                                  # Skip publishing for invalid directions
             self.distance = cmd.get("distance", 0)
-            self.default_speed_moving = 0.5 * self.nav_execution_speed                                  # = 0.5 m/s ?
-            self.publish_duration = self.distance / self.default_speed_moving if self.distance else 0.0
+            self.default_speed_moving = 0.5 * self.nav_execution_speed 
+            self.max_move_speed = 1.0 #m/s SET BY NAVIGATION TEAM
+            self.default_speed_moving_m_by_s= self.default_speed_moving * self.max_move_speed
+            self.publish_duration = self.distance / self.default_speed_moving_m_by_s if self.distance else 0.0
 
             concerned_axe = 5 if cmd['direction'] == 'forward' else 2                                   # GP_axis_R2 = 5 (forward) and GP_axis_L2 = 2 (backward)
             self.joy_msg.axes[concerned_axe] = self.default_speed_moving  
-            self.get_logger().info(f"Publishing command during {self.publish_duration:.2f}s at frequency {(1/self.pub_freq_4_joy):.2f} msg/s. Move speed {self.default_speed_moving} m/s.")
+            self.get_logger().info(f"Publishing command during {self.publish_duration:.2f}s at frequency {(1/self.pub_freq_4_joy):.2f} msg/s. Move speed: {self.default_speed_moving*100}% of max speed set to {self.max_move_speed} m/s.")
 
         elif cmd['command'] == 'turn':
             if cmd['direction'] not in ['left', 'right', '180_turn', '360_turn']:
@@ -320,16 +322,18 @@ class VoCom_PubSub(Node):
             elif cmd['direction'] == '360_turn':
                 cmd['angle'] = 360
             elif (cmd['direction'] in ['right', 'left']) and (cmd.get("angle", 0) == 0):
-                cmd['angle'] = 360
+                cmd['angle'] = 90
                 
-            self.angle = np.radians(cmd.get("angle", 0)) if cmd.get("angle", 0) else 0
-            self.default_speed_angle = 0.5 * self.nav_execution_speed                                   # = 0.8 rad/s?
-            self.publish_duration = self.angle / self.default_speed_angle                               # angle not distance!
+            self.angle = np.radians(cmd.get("angle", 90))
+            self.default_speed_angle = 0.5 * self.nav_execution_speed
+            self.max_rot_speed = 0.7 #rad/s SET BY NAVIGATION TEAM
+            self.default_speed_angle_rad_by_s= self.default_speed_angle * self.max_rot_speed
+            self.publish_duration = self.angle / self.default_speed_angle_rad_by_s                               # angle not distance!
 
             self.joy_msg.buttons[7] = 1                                                                 # Rotation on itself (crab)
             concerned_axe = 0
             self.joy_msg.axes[concerned_axe] = self.default_speed_angle if cmd['direction'] == 'right' else -self.default_speed_angle # par défaut tourner a gauche si direction is 180 or 360_turn
-            self.get_logger().info(f"Publishing command during {self.publish_duration:.2f}s at frequency {(1/self.pub_freq_4_joy):.2f} msg/s. Turn speed: {self.default_speed_angle} rad/s.")
+            self.get_logger().info(f"Publishing command during {self.publish_duration:.2f}s at frequency {(1/self.pub_freq_4_joy):.2f} msg/s. Turn speed: {self.default_speed_angle*100}% of max speed set to {self.max_rot_speed} rad/s.")
 
         elif cmd['command'] in ['not_a_command', 'not a command']:
             return                                                                                      # Skip publishing for invalid commands
