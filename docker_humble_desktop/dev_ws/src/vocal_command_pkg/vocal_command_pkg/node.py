@@ -41,6 +41,7 @@ class VoCom_PubSub(Node):
 
         self.get_logger().info('ROS node for human-rover communication has started.')
         self.get_logger().info('Waiting for system activation from the Control Station...')
+        self.get_logger().info('Received (fake) boolean service from the CS')
 
         # PUBLISHER
         # qos_profile = QoSProfile(
@@ -67,7 +68,7 @@ class VoCom_PubSub(Node):
 
     def initialize_models(self):
         """Initialize Whisper models."""                                          # https://github.com/openai/whisper/discussions/1463
-        self.get_logger().info("Loading Whisper small.en model...")
+        self.get_logger().info("Loading Whisper base.en model...")
         self.model_whisper_base_en = whisper_config("small.en")
         self.get_logger().info("Whisper base.en model ready")
 

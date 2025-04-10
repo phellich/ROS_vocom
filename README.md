@@ -135,7 +135,7 @@ Output:
 
 [comment]: <> (<img src="docs/T2C_demo.png" alt="Prompt ex" width="400">)
 
-We use a Llama model wrapper called [Llama.cpp](https://github.com/ggerganov/llama.cpp). It has a [`JSON Schema Mode`](https://llama-cpp-python.readthedocs.io/en/latest/#json-mode) which guarantees that the output is a valid JSON instance following the specified schema. The model can be easily changed as long as it is in gguf format. We use quantized LLama-3.2-3B-Instruct-Q6_K_L.gguf version from [Hugging Face](https://github.com/ggerganov/llama.cpp). 
+We use a Llama model wrapper called [Llama.cpp](https://github.com/ggerganov/llama.cpp). It has a [`JSON Schema Mode`](https://llama-cpp-python.readthedocs.io/en/latest/#json-mode) which guarantees that the output is a valid JSON instance following the specified schema. The model can be easily changed as long as it is in gguf format. We use quantized LLama-3.2-3B-Instruct-Q6_K_L.gguf version from [Hugging Face](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF). 
 
 ### 4. Commands execution
 Once the commands are loaded into a JSON file, we iterate through and execute them sequentially. Each command is translated into a Joy message and published to the `/CS/NAV_gamepad` topic. 

@@ -213,9 +213,9 @@ def prepare_llama_cpp_generation():
         execution_speed: Optional[Literal["fast", "slow", "default"]] = Field(None, description="Execution speed for the mission")
         distance: Optional[float] = Field(None, description="Distance in meters, null otherwise")
         angle: Optional[float] = Field(None, description="Rotation angle in degrees, null otherwise")
-        camera_toggle: Optional[Literal["turn_on", "turn_off"]] = Field(None, description="Indicates whether to turn the cameras on or off, null otherwise")
-        drill_rotation_speed: Optional[int] = Field(None, description="Optional drill rotation speed, null otherwise") # in what unit??
-        drill_distance_ratio: Optional[float] = Field(None, description="Optional drill distance ratio, null otherwise") # ratio of what??
+        # camera_toggle: Optional[Literal["turn_on", "turn_off"]] = Field(None, description="Indicates whether to turn the cameras on or off, null otherwise")
+        # drill_rotation_speed: Optional[int] = Field(None, description="Optional drill rotation speed, null otherwise") # in what unit??
+        # drill_distance_ratio: Optional[float] = Field(None, description="Optional drill distance ratio, null otherwise") # ratio of what??
 
     class MissionPlan(BaseModel):
         commands: List[RoverCommand] = Field(description="List of commands to be executed by the rover")
