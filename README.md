@@ -1,6 +1,7 @@
 # Xplore - Enabling Human-Rover Communication
 
-[Link to draft of Medium article](https://medium.com/@hellich.pierre/human-robot-communication-for-embedded-systems-ac09a6c37cc6)
+[Link to Medium article](https://medium.com/elca-it/human-robot-communication-for-embedded-systems-2a6d040daadc)
+Check Main branch
 
 Welcome to the Human-Rover Communication project GitHub. The goal is to develop a rover capable of recognizing, understanding, and executing vocal commands (e.g., _Hello Kerby, go forward for 3 meters and turn 70 degrees left. Goodbye!_). Navigation and other commands must be highly precise, leaving no room for interpretation by the model (angle or distance). 
 
